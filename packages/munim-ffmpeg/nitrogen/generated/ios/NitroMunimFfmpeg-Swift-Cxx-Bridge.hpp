@@ -192,6 +192,43 @@ namespace margelo::nitro::munimffmpeg::bridge::swift {
     return optional.value();
   }
   
+  // pragma MARK: std::function<void(double /* sessionId */)>
+  /**
+   * Specialized version of `std::function<void(double)>`.
+   */
+  using Func_void_double = std::function<void(double /* sessionId */)>;
+  /**
+   * Wrapper class for a `std::function<void(double / * sessionId * /)>`, this can be used from Swift.
+   */
+  class Func_void_double_Wrapper final {
+  public:
+    explicit Func_void_double_Wrapper(std::function<void(double /* sessionId */)>&& func): _function(std::make_unique<std::function<void(double /* sessionId */)>>(std::move(func))) {}
+    inline void call(double sessionId) const noexcept {
+      _function->operator()(sessionId);
+    }
+  private:
+    std::unique_ptr<std::function<void(double /* sessionId */)>> _function;
+  } SWIFT_NONCOPYABLE;
+  Func_void_double create_Func_void_double(void* NON_NULL swiftClosureWrapper) noexcept;
+  inline Func_void_double_Wrapper wrap_Func_void_double(Func_void_double value) noexcept {
+    return Func_void_double_Wrapper(std::move(value));
+  }
+  
+  // pragma MARK: std::optional<std::function<void(double /* sessionId */)>>
+  /**
+   * Specialized version of `std::optional<std::function<void(double / * sessionId * /)>>`.
+   */
+  using std__optional_std__function_void_double____sessionId______ = std::optional<std::function<void(double /* sessionId */)>>;
+  inline std::optional<std::function<void(double /* sessionId */)>> create_std__optional_std__function_void_double____sessionId______(const std::function<void(double /* sessionId */)>& value) noexcept {
+    return std::optional<std::function<void(double /* sessionId */)>>(value);
+  }
+  inline bool has_value_std__optional_std__function_void_double____sessionId______(const std::optional<std::function<void(double /* sessionId */)>>& optional) noexcept {
+    return optional.has_value();
+  }
+  inline std::function<void(double /* sessionId */)> get_std__optional_std__function_void_double____sessionId______(const std::optional<std::function<void(double /* sessionId */)>>& optional) noexcept {
+    return optional.value();
+  }
+  
   // pragma MARK: std::shared_ptr<Promise<std::string>>
   /**
    * Specialized version of `std::shared_ptr<Promise<std::string>>`.

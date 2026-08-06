@@ -54,8 +54,8 @@ namespace margelo::nitro::munimffmpeg {
 
   public:
     // Methods
-    std::shared_ptr<Promise<FFmpegSessionResult>> execute(const std::vector<std::string>& arguments_, const std::optional<std::function<void(const std::string& /* message */)>>& onLog, const std::optional<std::function<void(double /* timeMs */, double /* sizeBytes */, double /* bitrateKbits */, double /* speed */, double /* videoFrameNumber */, double /* fps */, double /* quality */)>>& onStatistics) override;
-    std::shared_ptr<Promise<FFmpegSessionResult>> probe(const std::vector<std::string>& arguments_, const std::optional<std::function<void(const std::string& /* message */)>>& onLog) override;
+    std::shared_ptr<Promise<FFmpegSessionResult>> execute(const std::vector<std::string>& arguments_, const std::optional<std::function<void(const std::string& /* message */)>>& onLog, const std::optional<std::function<void(double /* timeMs */, double /* sizeBytes */, double /* bitrateKbits */, double /* speed */, double /* videoFrameNumber */, double /* fps */, double /* quality */)>>& onStatistics, const std::optional<std::function<void(double /* sessionId */)>>& onSessionCreated) override;
+    std::shared_ptr<Promise<FFmpegSessionResult>> probe(const std::vector<std::string>& arguments_, const std::optional<std::function<void(const std::string& /* message */)>>& onLog, const std::optional<std::function<void(double /* sessionId */)>>& onSessionCreated) override;
     std::shared_ptr<Promise<std::string>> getMediaInformation(const std::string& path) override;
     void cancel(std::optional<double> sessionId) override;
     void cancelAll() override;

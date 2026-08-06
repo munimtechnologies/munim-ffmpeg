@@ -46,6 +46,14 @@ namespace margelo::nitro::munimffmpeg::bridge::swift {
     };
   }
   
+  // pragma MARK: std::function<void(double /* sessionId */)>
+  Func_void_double create_Func_void_double(void* NON_NULL swiftClosureWrapper) noexcept {
+    auto swiftClosure = NitroMunimFfmpeg::Func_void_double::fromUnsafe(swiftClosureWrapper);
+    return [swiftClosure = std::move(swiftClosure)](double sessionId) mutable -> void {
+      swiftClosure.call(sessionId);
+    };
+  }
+  
   // pragma MARK: std::shared_ptr<HybridMunimFfmpegSpec>
   std::shared_ptr<HybridMunimFfmpegSpec> create_std__shared_ptr_HybridMunimFfmpegSpec_(void* NON_NULL swiftUnsafePointer) noexcept {
     NitroMunimFfmpeg::HybridMunimFfmpegSpec_cxx swiftPart = NitroMunimFfmpeg::HybridMunimFfmpegSpec_cxx::fromUnsafe(swiftUnsafePointer);

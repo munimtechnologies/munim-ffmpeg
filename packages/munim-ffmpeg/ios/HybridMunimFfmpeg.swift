@@ -9,11 +9,12 @@ final class HybridMunimFfmpeg: HybridMunimFfmpegSpec {
   func execute(
     arguments_: [String],
     onLog: ((_ message: String) -> Void)?,
-    onStatistics: ((_ timeMs: Double, _ sizeBytes: Double, _ bitrateKbits: Double, _ speed: Double, _ videoFrameNumber: Double, _ fps: Double, _ quality: Double) -> Void)?
+    onStatistics: ((_ timeMs: Double, _ sizeBytes: Double, _ bitrateKbits: Double, _ speed: Double, _ videoFrameNumber: Double, _ fps: Double, _ quality: Double) -> Void)?,
+    onSessionCreated: ((_ sessionId: Double) -> Void)?
   ) throws -> Promise<FFmpegSessionResult> {
     let promise = Promise<FFmpegSessionResult>()
 
-    FFmpegKit.execute(
+    let session = FFmpegKit.execute(
       withArgumentsAsync: arguments_,
       withCompleteCallback: { session in
         guard let session else {
@@ -39,17 +40,21 @@ final class HybridMunimFfmpeg: HybridMunimFfmpegSpec {
         )
       }
     )
+    if let session {
+      onSessionCreated?(Double(session.getId()))
+    }
 
     return promise
   }
 
   func probe(
     arguments_: [String],
-    onLog: ((_ message: String) -> Void)?
+    onLog: ((_ message: String) -> Void)?,
+    onSessionCreated: ((_ sessionId: Double) -> Void)?
   ) throws -> Promise<FFmpegSessionResult> {
     let promise = Promise<FFmpegSessionResult>()
 
-    FFprobeKit.execute(
+    let session = FFprobeKit.execute(
       withArgumentsAsync: arguments_,
       withCompleteCallback: { session in
         guard let session else {
@@ -63,6 +68,9 @@ final class HybridMunimFfmpeg: HybridMunimFfmpegSpec {
         onLog?(message)
       }
     )
+    if let session {
+      onSessionCreated?(Double(session.getId()))
+    }
 
     return promise
   }
@@ -102,6 +110,14 @@ final class HybridMunimFfmpeg: HybridMunimFfmpegSpec {
 
   func cancel(sessionId: Double?) throws {
     if let sessionId {
+      guard
+        sessionId.isFinite,
+        sessionId > 0,
+        sessionId.rounded(.towardZero) == sessionId,
+        sessionId <= 9_007_199_254_740_991
+      else {
+        throw MunimFfmpegError.invalidSessionId(sessionId)
+      }
       FFmpegKit.cancel(Int(sessionId))
     } else {
       FFmpegKit.cancel()
@@ -130,6 +146,7 @@ final class HybridMunimFfmpeg: HybridMunimFfmpegSpec {
 private enum MunimFfmpegError: LocalizedError {
   case missingSession
   case executionFailed(String)
+  case invalidSessionId(Double)
 
   var errorDescription: String? {
     switch self {
@@ -137,6 +154,8 @@ private enum MunimFfmpegError: LocalizedError {
       return "FFmpegKit did not return a session."
     case .executionFailed(let message):
       return message
+    case .invalidSessionId(let sessionId):
+      return "Invalid FFmpeg session ID: \(sessionId). Expected a positive safe integer."
     }
   }
 }

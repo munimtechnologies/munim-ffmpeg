@@ -70,6 +70,7 @@ Commands are passed as argument arrays. Do not include the `ffmpeg` or `ffprobe`
 
 ```typescript
 import {
+  cancel,
   execute,
   getFFmpegVersion,
   getMediaInformation,
@@ -78,8 +79,10 @@ import {
 
 console.log("FFmpeg:", getFFmpegVersion());
 
-const result = await execute(
-  ["-i", inputUri, "-c:v", "libx264", "-c:a", "aac", outputUri],
+let activeSessionId: number | undefined;
+
+const execution = execute(
+  ["-i", inputUri, "-c:v", "mpeg4", "-c:a", "aac", outputUri],
   (message) => console.log(message),
   (timeMs, sizeBytes, bitrateKbits, speed, frame, fps, quality) => {
     console.log({
@@ -92,7 +95,15 @@ const result = await execute(
       quality,
     });
   },
+  (sessionId) => {
+    activeSessionId = sessionId;
+  },
 );
+
+// From a cancel button while the command is running:
+if (activeSessionId !== undefined) cancel(activeSessionId);
+
+const result = await execution;
 
 if (!result.success) {
   throw new Error(result.failStackTrace ?? result.output);
@@ -113,11 +124,11 @@ Use local filesystem paths understood by the native FFmpeg build. If an Expo API
 
 ## API
 
-### `execute(arguments, onLog?, onStatistics?)`
+### `execute(arguments, onLog?, onStatistics?, onSessionCreated?)`
 
-Runs an FFmpeg session and resolves to an `FFmpegSessionResult`.
+Runs an FFmpeg session and resolves to an `FFmpegSessionResult`. `onSessionCreated` receives the native session ID immediately so a running command can be cancelled individually.
 
-### `probe(arguments, onLog?)`
+### `probe(arguments, onLog?, onSessionCreated?)`
 
 Runs an FFprobe session and resolves to an `FFmpegSessionResult`.
 
@@ -127,7 +138,7 @@ Reads and parses FFprobe media information. The return type is `Promise<unknown>
 
 ### `cancel(sessionId?)`
 
-Cancels a specific native session. Omitting `sessionId` uses the native compatibility API's default cancellation behavior.
+Cancels a specific native session. Capture its ID with `onSessionCreated` while the command is running. Omitting `sessionId` cancels all sessions.
 
 ### `cancelAll()`
 

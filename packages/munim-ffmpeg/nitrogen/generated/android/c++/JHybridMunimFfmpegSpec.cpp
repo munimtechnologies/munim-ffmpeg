@@ -21,6 +21,7 @@ namespace margelo::nitro::munimffmpeg { struct FFmpegSessionResult; }
 #include "JFunc_void_std__string.hpp"
 #include <NitroModules/JNICallable.hpp>
 #include "JFunc_void_double_double_double_double_double_double_double.hpp"
+#include "JFunc_void_double.hpp"
 
 namespace margelo::nitro::munimffmpeg {
 
@@ -59,8 +60,8 @@ namespace margelo::nitro::munimffmpeg {
   }
 
   // Methods
-  std::shared_ptr<Promise<FFmpegSessionResult>> JHybridMunimFfmpegSpec::execute(const std::vector<std::string>& arguments_, const std::optional<std::function<void(const std::string& /* message */)>>& onLog, const std::optional<std::function<void(double /* timeMs */, double /* sizeBytes */, double /* bitrateKbits */, double /* speed */, double /* videoFrameNumber */, double /* fps */, double /* quality */)>>& onStatistics) {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JArrayClass<jni::JString>> /* arguments_ */, jni::alias_ref<JFunc_void_std__string::javaobject> /* onLog */, jni::alias_ref<JFunc_void_double_double_double_double_double_double_double::javaobject> /* onStatistics */)>("execute_cxx");
+  std::shared_ptr<Promise<FFmpegSessionResult>> JHybridMunimFfmpegSpec::execute(const std::vector<std::string>& arguments_, const std::optional<std::function<void(const std::string& /* message */)>>& onLog, const std::optional<std::function<void(double /* timeMs */, double /* sizeBytes */, double /* bitrateKbits */, double /* speed */, double /* videoFrameNumber */, double /* fps */, double /* quality */)>>& onStatistics, const std::optional<std::function<void(double /* sessionId */)>>& onSessionCreated) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JArrayClass<jni::JString>> /* arguments_ */, jni::alias_ref<JFunc_void_std__string::javaobject> /* onLog */, jni::alias_ref<JFunc_void_double_double_double_double_double_double_double::javaobject> /* onStatistics */, jni::alias_ref<JFunc_void_double::javaobject> /* onSessionCreated */)>("execute_cxx");
     auto __result = method(_javaPart, [&](auto&& __input) {
       size_t __size = __input.size();
       jni::local_ref<jni::JArrayClass<jni::JString>> __array = jni::JArrayClass<jni::JString>::newArray(__size);
@@ -70,7 +71,7 @@ namespace margelo::nitro::munimffmpeg {
         __array->setElement(__i, *__elementJni);
       }
       return __array;
-    }(arguments_), onLog.has_value() ? JFunc_void_std__string_cxx::fromCpp(onLog.value()) : nullptr, onStatistics.has_value() ? JFunc_void_double_double_double_double_double_double_double_cxx::fromCpp(onStatistics.value()) : nullptr);
+    }(arguments_), onLog.has_value() ? JFunc_void_std__string_cxx::fromCpp(onLog.value()) : nullptr, onStatistics.has_value() ? JFunc_void_double_double_double_double_double_double_double_cxx::fromCpp(onStatistics.value()) : nullptr, onSessionCreated.has_value() ? JFunc_void_double_cxx::fromCpp(onSessionCreated.value()) : nullptr);
     return [&]() {
       auto __promise = Promise<FFmpegSessionResult>::create();
       __result->cthis()->addOnResolvedListener([=](const jni::alias_ref<jni::JObject>& __boxedResult) {
@@ -84,8 +85,8 @@ namespace margelo::nitro::munimffmpeg {
       return __promise;
     }();
   }
-  std::shared_ptr<Promise<FFmpegSessionResult>> JHybridMunimFfmpegSpec::probe(const std::vector<std::string>& arguments_, const std::optional<std::function<void(const std::string& /* message */)>>& onLog) {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JArrayClass<jni::JString>> /* arguments_ */, jni::alias_ref<JFunc_void_std__string::javaobject> /* onLog */)>("probe_cxx");
+  std::shared_ptr<Promise<FFmpegSessionResult>> JHybridMunimFfmpegSpec::probe(const std::vector<std::string>& arguments_, const std::optional<std::function<void(const std::string& /* message */)>>& onLog, const std::optional<std::function<void(double /* sessionId */)>>& onSessionCreated) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JArrayClass<jni::JString>> /* arguments_ */, jni::alias_ref<JFunc_void_std__string::javaobject> /* onLog */, jni::alias_ref<JFunc_void_double::javaobject> /* onSessionCreated */)>("probe_cxx");
     auto __result = method(_javaPart, [&](auto&& __input) {
       size_t __size = __input.size();
       jni::local_ref<jni::JArrayClass<jni::JString>> __array = jni::JArrayClass<jni::JString>::newArray(__size);
@@ -95,7 +96,7 @@ namespace margelo::nitro::munimffmpeg {
         __array->setElement(__i, *__elementJni);
       }
       return __array;
-    }(arguments_), onLog.has_value() ? JFunc_void_std__string_cxx::fromCpp(onLog.value()) : nullptr);
+    }(arguments_), onLog.has_value() ? JFunc_void_std__string_cxx::fromCpp(onLog.value()) : nullptr, onSessionCreated.has_value() ? JFunc_void_double_cxx::fromCpp(onSessionCreated.value()) : nullptr);
     return [&]() {
       auto __promise = Promise<FFmpegSessionResult>::create();
       __result->cthis()->addOnResolvedListener([=](const jni::alias_ref<jni::JObject>& __boxedResult) {

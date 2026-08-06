@@ -36,13 +36,23 @@ import {
   probe,
 } from 'munim-ffmpeg'
 
-const result = await execute(
-  ['-i', inputUri, '-c:v', 'libx264', '-c:a', 'aac', outputUri],
+let activeSessionId: number | undefined
+
+const execution = execute(
+  ['-i', inputUri, '-c:v', 'mpeg4', '-c:a', 'aac', outputUri],
   (message) => console.log(message),
   (timeMs, sizeBytes, bitrateKbits, speed) => {
     console.log({ timeMs, sizeBytes, bitrateKbits, speed })
+  },
+  (sessionId) => {
+    activeSessionId = sessionId
   }
 )
+
+// From a cancel button while the command is running:
+if (activeSessionId !== undefined) cancel(activeSessionId)
+
+const result = await execution
 
 if (!result.success) {
   throw new Error(result.failStackTrace ?? result.output)
@@ -51,19 +61,16 @@ if (!result.success) {
 const information = await getMediaInformation(inputUri)
 const probeResult = await probe(['-v', 'error', '-show_streams', inputUri])
 const version = getFFmpegVersion()
-
-// Cancel a specific session returned to native code, or omit the ID to cancel all.
-cancel(result.sessionId)
 ```
 
 Use native filesystem paths or `file://` URIs that the app can access. Android `content://` input may need to be copied into application storage first.
 
 ## API
 
-- `execute(arguments, onLog?, onStatistics?)` returns `Promise<FFmpegSessionResult>`.
-- `probe(arguments, onLog?)` returns `Promise<FFmpegSessionResult>`.
+- `execute(arguments, onLog?, onStatistics?, onSessionCreated?)` returns `Promise<FFmpegSessionResult>`.
+- `probe(arguments, onLog?, onSessionCreated?)` returns `Promise<FFmpegSessionResult>`.
 - `getMediaInformation(path)` returns parsed FFprobe JSON.
-- `cancel(sessionId?)` cancels one session, or all sessions when no ID is supplied.
+- `cancel(sessionId?)` cancels one running session using the ID from `onSessionCreated`, or all sessions when no ID is supplied.
 - `cancelAll()` cancels all sessions.
 - `getFFmpegVersion()` returns the bundled FFmpeg version.
 

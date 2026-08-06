@@ -32,21 +32,21 @@ abstract class HybridMunimFfmpegSpec: HybridObject() {
   abstract val ffmpegVersion: String
 
   // Methods
-  abstract fun execute(arguments_: Array<String>, onLog: ((message: String) -> Unit)?, onStatistics: ((timeMs: Double, sizeBytes: Double, bitrateKbits: Double, speed: Double, videoFrameNumber: Double, fps: Double, quality: Double) -> Unit)?): Promise<FFmpegSessionResult>
+  abstract fun execute(arguments_: Array<String>, onLog: ((message: String) -> Unit)?, onStatistics: ((timeMs: Double, sizeBytes: Double, bitrateKbits: Double, speed: Double, videoFrameNumber: Double, fps: Double, quality: Double) -> Unit)?, onSessionCreated: ((sessionId: Double) -> Unit)?): Promise<FFmpegSessionResult>
   
   @DoNotStrip
   @Keep
-  private fun execute_cxx(arguments_: Array<String>, onLog: Func_void_std__string?, onStatistics: Func_void_double_double_double_double_double_double_double?): Promise<FFmpegSessionResult> {
-    val __result = execute(arguments_, onLog?.let { it }, onStatistics?.let { it })
+  private fun execute_cxx(arguments_: Array<String>, onLog: Func_void_std__string?, onStatistics: Func_void_double_double_double_double_double_double_double?, onSessionCreated: Func_void_double?): Promise<FFmpegSessionResult> {
+    val __result = execute(arguments_, onLog?.let { it }, onStatistics?.let { it }, onSessionCreated?.let { it })
     return __result
   }
   
-  abstract fun probe(arguments_: Array<String>, onLog: ((message: String) -> Unit)?): Promise<FFmpegSessionResult>
+  abstract fun probe(arguments_: Array<String>, onLog: ((message: String) -> Unit)?, onSessionCreated: ((sessionId: Double) -> Unit)?): Promise<FFmpegSessionResult>
   
   @DoNotStrip
   @Keep
-  private fun probe_cxx(arguments_: Array<String>, onLog: Func_void_std__string?): Promise<FFmpegSessionResult> {
-    val __result = probe(arguments_, onLog?.let { it })
+  private fun probe_cxx(arguments_: Array<String>, onLog: Func_void_std__string?, onSessionCreated: Func_void_double?): Promise<FFmpegSessionResult> {
+    val __result = probe(arguments_, onLog?.let { it }, onSessionCreated?.let { it })
     return __result
   }
   

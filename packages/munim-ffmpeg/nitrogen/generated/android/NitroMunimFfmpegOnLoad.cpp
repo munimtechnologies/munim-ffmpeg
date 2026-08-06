@@ -18,6 +18,7 @@
 #include "JHybridMunimFfmpegSpec.hpp"
 #include "JFunc_void_std__string.hpp"
 #include "JFunc_void_double_double_double_double_double_double_double.hpp"
+#include "JFunc_void_double.hpp"
 #include <NitroModules/DefaultConstructableObject.hpp>
 
 namespace margelo::nitro::munimffmpeg {
@@ -45,6 +46,7 @@ void registerAllNatives() {
   margelo::nitro::munimffmpeg::JHybridMunimFfmpegSpec::CxxPart::registerNatives();
   margelo::nitro::munimffmpeg::JFunc_void_std__string_cxx::registerNatives();
   margelo::nitro::munimffmpeg::JFunc_void_double_double_double_double_double_double_double_cxx::registerNatives();
+  margelo::nitro::munimffmpeg::JFunc_void_double_cxx::registerNatives();
 
   // Register Nitro Hybrid Objects
   HybridObjectRegistry::registerHybridObjectConstructor(

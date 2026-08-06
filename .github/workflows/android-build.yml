@@ -12,6 +12,10 @@ on:
       - "packages/munim-ffmpeg/nitrogen/generated/android/**"
       - "packages/munim-ffmpeg/nitrogen/generated/shared/**"
       - "packages/munim-ffmpeg/src/**"
+      - "packages/munim-ffmpeg/scripts/**"
+      - "packages/munim-ffmpeg/package.json"
+      - "packages/munim-ffmpeg/app.plugin.js"
+      - "packages/munim-ffmpeg/*.podspec"
       - "packages/munim-ffmpeg/nitro.json"
       - "packages/munim-ffmpeg/react-native.config.js"
   pull_request:
@@ -24,6 +28,10 @@ on:
       - "packages/munim-ffmpeg/nitrogen/generated/android/**"
       - "packages/munim-ffmpeg/nitrogen/generated/shared/**"
       - "packages/munim-ffmpeg/src/**"
+      - "packages/munim-ffmpeg/scripts/**"
+      - "packages/munim-ffmpeg/package.json"
+      - "packages/munim-ffmpeg/app.plugin.js"
+      - "packages/munim-ffmpeg/*.podspec"
       - "packages/munim-ffmpeg/nitro.json"
       - "packages/munim-ffmpeg/react-native.config.js"
   workflow_dispatch:

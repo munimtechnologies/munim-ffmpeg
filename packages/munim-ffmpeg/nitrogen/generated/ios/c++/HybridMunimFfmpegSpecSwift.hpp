@@ -75,16 +75,16 @@ namespace margelo::nitro::munimffmpeg {
 
   public:
     // Methods
-    inline std::shared_ptr<Promise<FFmpegSessionResult>> execute(const std::vector<std::string>& arguments_, const std::optional<std::function<void(const std::string& /* message */)>>& onLog, const std::optional<std::function<void(double /* timeMs */, double /* sizeBytes */, double /* bitrateKbits */, double /* speed */, double /* videoFrameNumber */, double /* fps */, double /* quality */)>>& onStatistics) override {
-      auto __result = _swiftPart.execute(arguments_, onLog, onStatistics);
+    inline std::shared_ptr<Promise<FFmpegSessionResult>> execute(const std::vector<std::string>& arguments_, const std::optional<std::function<void(const std::string& /* message */)>>& onLog, const std::optional<std::function<void(double /* timeMs */, double /* sizeBytes */, double /* bitrateKbits */, double /* speed */, double /* videoFrameNumber */, double /* fps */, double /* quality */)>>& onStatistics, const std::optional<std::function<void(double /* sessionId */)>>& onSessionCreated) override {
+      auto __result = _swiftPart.execute(arguments_, onLog, onStatistics, onSessionCreated);
       if (__result.hasError()) [[unlikely]] {
         std::rethrow_exception(__result.error());
       }
       auto __value = std::move(__result.value());
       return __value;
     }
-    inline std::shared_ptr<Promise<FFmpegSessionResult>> probe(const std::vector<std::string>& arguments_, const std::optional<std::function<void(const std::string& /* message */)>>& onLog) override {
-      auto __result = _swiftPart.probe(arguments_, onLog);
+    inline std::shared_ptr<Promise<FFmpegSessionResult>> probe(const std::vector<std::string>& arguments_, const std::optional<std::function<void(const std::string& /* message */)>>& onLog, const std::optional<std::function<void(double /* sessionId */)>>& onSessionCreated) override {
+      auto __result = _swiftPart.probe(arguments_, onLog, onSessionCreated);
       if (__result.hasError()) [[unlikely]] {
         std::rethrow_exception(__result.error());
       }

@@ -13,6 +13,8 @@ export type FFmpegSessionResult = {
 
 export type FFmpegLogCallback = (message: string) => void
 
+export type FFmpegSessionCreatedCallback = (sessionId: number) => void
+
 export type FFmpegStatisticsCallback = (
   timeMs: number,
   sizeBytes: number,
@@ -23,19 +25,23 @@ export type FFmpegStatisticsCallback = (
   quality: number
 ) => void
 
-export interface MunimFfmpeg
-  extends HybridObject<{ ios: 'swift'; android: 'kotlin' }> {
+export interface MunimFfmpeg extends HybridObject<{
+  ios: 'swift'
+  android: 'kotlin'
+}> {
   readonly ffmpegVersion: string
 
   execute(
     arguments_: string[],
     onLog?: FFmpegLogCallback,
-    onStatistics?: FFmpegStatisticsCallback
+    onStatistics?: FFmpegStatisticsCallback,
+    onSessionCreated?: FFmpegSessionCreatedCallback
   ): Promise<FFmpegSessionResult>
 
   probe(
     arguments_: string[],
-    onLog?: FFmpegLogCallback
+    onLog?: FFmpegLogCallback,
+    onSessionCreated?: FFmpegSessionCreatedCallback
   ): Promise<FFmpegSessionResult>
 
   getMediaInformation(path: string): Promise<string>

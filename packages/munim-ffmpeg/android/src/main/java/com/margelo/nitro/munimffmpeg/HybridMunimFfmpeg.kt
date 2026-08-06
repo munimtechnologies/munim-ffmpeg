@@ -27,11 +27,12 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
       fps: Double,
       quality: Double,
     ) -> Unit)?,
+    onSessionCreated: ((sessionId: Double) -> Unit)?,
   ): Promise<FFmpegSessionResult> {
     val promise = Promise<FFmpegSessionResult>()
 
     try {
-      FFmpegKit.executeWithArgumentsAsync(
+      val session = FFmpegKit.executeWithArgumentsAsync(
         arguments_,
         { session -> promise.resolve(session.toResult()) },
         { log -> onLog?.invoke(log.message) },
@@ -47,6 +48,7 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
           )
         },
       )
+      onSessionCreated?.invoke(session.sessionId.toDouble())
     } catch (error: Throwable) {
       promise.reject(error)
     }
@@ -57,15 +59,17 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
   override fun probe(
     arguments_: Array<String>,
     onLog: ((message: String) -> Unit)?,
+    onSessionCreated: ((sessionId: Double) -> Unit)?,
   ): Promise<FFmpegSessionResult> {
     val promise = Promise<FFmpegSessionResult>()
 
     try {
-      FFprobeKit.executeWithArgumentsAsync(
+      val session = FFprobeKit.executeWithArgumentsAsync(
         arguments_,
         { session -> promise.resolve(session.toResult()) },
         { log -> onLog?.invoke(log.message) },
       )
+      onSessionCreated?.invoke(session.sessionId.toDouble())
     } catch (error: Throwable) {
       promise.reject(error)
     }
@@ -105,6 +109,14 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
     if (sessionId == null) {
       FFmpegKit.cancel()
     } else {
+      require(
+        sessionId.isFinite() &&
+          sessionId > 0 &&
+          sessionId % 1.0 == 0.0 &&
+          sessionId <= 9_007_199_254_740_991.0,
+      ) {
+        "Invalid FFmpeg session ID: $sessionId. Expected a positive safe integer."
+      }
       FFmpegKit.cancel(sessionId.toLong())
     }
   }

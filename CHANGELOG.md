@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Nitro Module HybridObject implemented in Swift and Kotlin.
 - Asynchronous FFmpeg and FFprobe argument execution.
 - Log and encoding-statistics callbacks.
+- Immediate session-created callbacks for targeted cancellation while work is running.
 - Media-information JSON parsing.
 - Session cancellation and bundled FFmpeg version reporting.
 - Expo config plugin, development example, and native autolinking configuration.

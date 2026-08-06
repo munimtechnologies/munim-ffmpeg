@@ -130,7 +130,7 @@ open class HybridMunimFfmpegSpec_cxx {
 
   // Methods
   @inline(__always)
-  public final func execute(arguments_: bridge.std__vector_std__string_, onLog: bridge.std__optional_std__function_void_const_std__string_____message______, onStatistics: bridge.std__optional_std__function_void_double____timeMs_____double____sizeBytes_____double____bitrateKbits_____double____speed_____double____videoFrameNumber_____double____fps_____double____quality______) -> bridge.Result_std__shared_ptr_Promise_FFmpegSessionResult___ {
+  public final func execute(arguments_: bridge.std__vector_std__string_, onLog: bridge.std__optional_std__function_void_const_std__string_____message______, onStatistics: bridge.std__optional_std__function_void_double____timeMs_____double____sizeBytes_____double____bitrateKbits_____double____speed_____double____videoFrameNumber_____double____fps_____double____quality______, onSessionCreated: bridge.std__optional_std__function_void_double____sessionId______) -> bridge.Result_std__shared_ptr_Promise_FFmpegSessionResult___ {
     do {
       let __result = try self.__implementation.execute(arguments_: arguments_.map({ __item in String(__item) }), onLog: { () -> ((_ message: String) -> Void)? in
         if bridge.has_value_std__optional_std__function_void_const_std__string_____message______(onLog) {
@@ -156,6 +156,18 @@ open class HybridMunimFfmpegSpec_cxx {
         } else {
           return nil
         }
+      }(), onSessionCreated: { () -> ((_ sessionId: Double) -> Void)? in
+        if bridge.has_value_std__optional_std__function_void_double____sessionId______(onSessionCreated) {
+          let __unwrapped = bridge.get_std__optional_std__function_void_double____sessionId______(onSessionCreated)
+          return { () -> (Double) -> Void in
+            let __wrappedFunction = bridge.wrap_Func_void_double(__unwrapped)
+            return { (__sessionId: Double) -> Void in
+              __wrappedFunction.call(__sessionId)
+            }
+          }()
+        } else {
+          return nil
+        }
       }())
       let __resultCpp = { () -> bridge.std__shared_ptr_Promise_FFmpegSessionResult__ in
         let __promise = bridge.create_std__shared_ptr_Promise_FFmpegSessionResult__()
@@ -173,7 +185,7 @@ open class HybridMunimFfmpegSpec_cxx {
   }
   
   @inline(__always)
-  public final func probe(arguments_: bridge.std__vector_std__string_, onLog: bridge.std__optional_std__function_void_const_std__string_____message______) -> bridge.Result_std__shared_ptr_Promise_FFmpegSessionResult___ {
+  public final func probe(arguments_: bridge.std__vector_std__string_, onLog: bridge.std__optional_std__function_void_const_std__string_____message______, onSessionCreated: bridge.std__optional_std__function_void_double____sessionId______) -> bridge.Result_std__shared_ptr_Promise_FFmpegSessionResult___ {
     do {
       let __result = try self.__implementation.probe(arguments_: arguments_.map({ __item in String(__item) }), onLog: { () -> ((_ message: String) -> Void)? in
         if bridge.has_value_std__optional_std__function_void_const_std__string_____message______(onLog) {
@@ -182,6 +194,18 @@ open class HybridMunimFfmpegSpec_cxx {
             let __wrappedFunction = bridge.wrap_Func_void_std__string(__unwrapped)
             return { (__message: String) -> Void in
               __wrappedFunction.call(std.string(__message))
+            }
+          }()
+        } else {
+          return nil
+        }
+      }(), onSessionCreated: { () -> ((_ sessionId: Double) -> Void)? in
+        if bridge.has_value_std__optional_std__function_void_double____sessionId______(onSessionCreated) {
+          let __unwrapped = bridge.get_std__optional_std__function_void_double____sessionId______(onSessionCreated)
+          return { () -> (Double) -> Void in
+            let __wrappedFunction = bridge.wrap_Func_void_double(__unwrapped)
+            return { (__sessionId: Double) -> Void in
+              __wrappedFunction.call(__sessionId)
             }
           }()
         } else {

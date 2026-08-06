@@ -13,8 +13,8 @@ public protocol HybridMunimFfmpegSpec_protocol: HybridObject {
   var ffmpegVersion: String { get }
 
   // Methods
-  func execute(arguments_: [String], onLog: ((_ message: String) -> Void)?, onStatistics: ((_ timeMs: Double, _ sizeBytes: Double, _ bitrateKbits: Double, _ speed: Double, _ videoFrameNumber: Double, _ fps: Double, _ quality: Double) -> Void)?) throws -> Promise<FFmpegSessionResult>
-  func probe(arguments_: [String], onLog: ((_ message: String) -> Void)?) throws -> Promise<FFmpegSessionResult>
+  func execute(arguments_: [String], onLog: ((_ message: String) -> Void)?, onStatistics: ((_ timeMs: Double, _ sizeBytes: Double, _ bitrateKbits: Double, _ speed: Double, _ videoFrameNumber: Double, _ fps: Double, _ quality: Double) -> Void)?, onSessionCreated: ((_ sessionId: Double) -> Void)?) throws -> Promise<FFmpegSessionResult>
+  func probe(arguments_: [String], onLog: ((_ message: String) -> Void)?, onSessionCreated: ((_ sessionId: Double) -> Void)?) throws -> Promise<FFmpegSessionResult>
   func getMediaInformation(path: String) throws -> Promise<String>
   func cancel(sessionId: Double?) throws -> Void
   func cancelAll() throws -> Void
