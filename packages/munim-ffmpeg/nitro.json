@@ -1,0 +1,30 @@
+{
+  "$schema": "https://nitro.margelo.com/nitro.schema.json",
+  "cxxNamespace": [
+    "munimffmpeg"
+  ],
+  "ios": {
+    "iosModuleName": "NitroMunimFfmpeg"
+  },
+  "android": {
+    "androidNamespace": [
+      "munimffmpeg"
+    ],
+    "androidCxxLibName": "NitroMunimFfmpeg"
+  },
+  "autolinking": {
+    "MunimFfmpeg": {
+      "ios": {
+        "language": "swift",
+        "implementationClassName": "HybridMunimFfmpeg"
+      },
+      "android": {
+        "language": "kotlin",
+        "implementationClassName": "HybridMunimFfmpeg"
+      }
+    }
+  },
+  "ignorePaths": [
+    "**/node_modules"
+  ]
+}
