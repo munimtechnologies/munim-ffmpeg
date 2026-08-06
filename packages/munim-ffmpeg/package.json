@@ -53,6 +53,12 @@
     "typescript",
     "nitro",
     "nitro-modules",
+    "react-native-ffmpeg",
+    "expo-plugin",
+    "video-processing",
+    "audio-processing",
+    "media-processing",
+    "transcoding",
     "munim-technologies"
   ],
   "repository": {

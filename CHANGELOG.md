@@ -8,11 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [0.1.1] - 2026-08-06
 
+### Fixed
+
+- Convert Android FFmpegKit FPS and quality statistics to the `Double` values required by the Nitro callback contract.
+- Configure Expo Android builds to select a single shared C++ runtime contributed by React Native and FFmpegKit.
+
 ### Documentation
 
 - Expanded the README to match the munim-bluetooth documentation experience.
 - Added package badges, navigation, feature categories, and a platform support matrix.
 - Added detailed Expo and React Native installation guidance, media-path handling, API signatures, usage recipes, troubleshooting, and native licensing guidance.
+- Added the Munim Technologies banner, platform badges, and expanded npm/GitHub discovery tags.
+- Documented the bundled Android artifact's GPL-enabled x264/x265 build explicitly.
+- Removed GitHub Actions automation in favor of local validation and manual publishing.
 
 ## [0.1.0] - 2026-08-06
 

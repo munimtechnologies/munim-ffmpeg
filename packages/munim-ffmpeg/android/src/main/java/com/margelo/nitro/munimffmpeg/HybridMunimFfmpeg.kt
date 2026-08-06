@@ -43,8 +43,8 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
             statistics.bitrate,
             statistics.speed,
             statistics.videoFrameNumber.toDouble(),
-            statistics.videoFps,
-            statistics.videoQuality,
+            statistics.videoFps.toDouble(),
+            statistics.videoQuality.toDouble(),
           )
         },
       )

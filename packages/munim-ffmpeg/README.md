@@ -1,5 +1,6 @@
 <p align="center">
   <a href="https://github.com/munimtechnologies/munim-ffmpeg">
+    <img alt="Munim Technologies" height="128" src="https://raw.githubusercontent.com/munimtechnologies/munim-ffmpeg/main/.github/resources/banner.png?v=1" />
     <h1 align="center">munim-ffmpeg</h1>
   </a>
 </p>
@@ -17,8 +18,17 @@
   <a aria-label="Total package downloads" href="https://www.npmjs.com/package/munim-ffmpeg">
     <img alt="Total downloads" src="https://img.shields.io/npm/dt/munim-ffmpeg.svg?style=flat-square&labelColor=gray&color=0066CC&label=Total%20Downloads" />
   </a>
-  <a aria-label="Continuous integration" href="https://github.com/munimtechnologies/munim-ffmpeg/actions/workflows/ci.yml">
-    <img alt="CI status" src="https://github.com/munimtechnologies/munim-ffmpeg/actions/workflows/ci.yml/badge.svg" />
+  <a aria-label="Expo development builds" href="https://docs.expo.dev/develop/development-builds/introduction/">
+    <img alt="Expo development builds" src="https://img.shields.io/badge/Expo-Development%20Build-000020?style=flat-square&logo=expo&logoColor=white" />
+  </a>
+  <a aria-label="iOS 15.1 or newer" href="https://developer.apple.com/ios/">
+    <img alt="iOS 15.1+" src="https://img.shields.io/badge/iOS-15.1%2B-000000?style=flat-square&logo=apple&logoColor=white" />
+  </a>
+  <a aria-label="Android API 24 or newer" href="https://developer.android.com/">
+    <img alt="Android API 24+" src="https://img.shields.io/badge/Android-API%2024%2B-3DDC84?style=flat-square&logo=android&logoColor=white" />
+  </a>
+  <a aria-label="Powered by Nitro Modules" href="https://nitro.margelo.com/">
+    <img alt="Nitro Modules 0.36.5+" src="https://img.shields.io/badge/Nitro%20Modules-0.36.5%2B-7C3AED?style=flat-square" />
   </a>
 </p>
 
@@ -51,7 +61,7 @@
 
 **Designed for Expo development builds and bare React Native.** This package contains native code and cannot run in Expo Go.
 
-> **Licensing note:** The JavaScript and Nitro bridge are Apache-2.0. The bundled FFmpegKit-compatible dependencies and FFmpeg retain their own licenses. Review [Native dependencies and licensing](#native-dependencies-and-licensing) before distributing an app.
+> **Licensing note:** The JavaScript and Nitro bridge are Apache-2.0. The bundled Android artifact is GPL-enabled and includes x264/x265; distributing it can trigger GPLv3 obligations. The native dependencies and FFmpeg retain their own licenses. Review [Native dependencies and licensing](#native-dependencies-and-licensing) before distributing an app.
 
 ## Table of contents
 
@@ -112,8 +122,8 @@
 | Log callback                 | ✅              | ✅              | Logs are delivered while a session is active.                                                                                                           |
 | Encoding-statistics callback | ✅              | ✅              | Available for FFmpeg execution.                                                                                                                         |
 | Immediate session ID         | ✅              | ✅              | `onSessionCreated` fires after the native session is created.                                                                                           |
-| Cancel one session           | ✅              | ✅              | Pass the positive safe-integer ID received by `onSessionCreated`.                                                                                       |
-| Cancel all sessions          | ✅              | ✅              | Use `cancelAll()` or call `cancel()` without an ID.                                                                                                     |
+| Cancel one FFmpeg session    | ✅              | ✅              | Pass the positive safe-integer ID received by `execute`'s `onSessionCreated`. The native dependency does not expose FFprobe cancellation.               |
+| Cancel all FFmpeg sessions   | ✅              | ✅              | Use `cancelAll()` or call `cancel()` without an ID.                                                                                                     |
 | Expo Go                      | ❌              | ❌              | A native development build is required.                                                                                                                 |
 | Remote HTTP(S) inputs        | Build-dependent | Build-dependent | The bundled variants include HTTPS support, but remote server behavior and protocol support can vary. Prefer local files for predictable app workflows. |
 
@@ -137,6 +147,18 @@ pod install
 cd ..
 ```
 
+FFmpegKit and React Native both provide `libc++_shared.so`. Resolve that duplicate in the Android application module:
+
+```groovy
+android {
+  packagingOptions {
+    jniLibs {
+      pickFirsts += ['**/libc++_shared.so']
+    }
+  }
+}
+```
+
 ### Expo
 
 ```bash
@@ -152,6 +174,8 @@ The package includes an Expo config plugin. If your project manages its plugin l
   }
 }
 ```
+
+The plugin also configures Android to select one shared C++ runtime when React Native and FFmpegKit contribute the same `libc++_shared.so` path.
 
 Create a native development build after installation:
 
@@ -281,6 +305,8 @@ function probe(
 ): Promise<FFmpegSessionResult>
 ```
 
+`onSessionCreated` can be used to correlate the native probe session with its eventual result. The bundled native dependency does not expose FFprobe cancellation.
+
 ### `getMediaInformation(path)`
 
 Runs FFprobe for the format, streams, and chapters at a local media path, then parses its JSON response.
@@ -293,7 +319,7 @@ Applications should validate or narrow the returned JSON shape before using fiel
 
 ### `cancel(sessionId?)`
 
-Cancels the given native session. Calling `cancel()` without an ID cancels all active sessions.
+Cancels the given native FFmpeg execution session. Calling `cancel()` without an ID cancels all active FFmpeg sessions. FFprobe cancellation is not exposed by the bundled native dependency.
 
 ```typescript
 function cancel(sessionId?: number): void
@@ -439,12 +465,14 @@ The JavaScript, TypeScript, Swift, Kotlin, and generated Nitro bridge code in th
 | iOS      | `ffmpeg-kit-ios-https-alt`                          | 6.0     |
 | Android  | `io.github.jamaismagic.ffmpeg:ffmpeg-kit-main-16kb` | 6.1.4   |
 
+The bundled Android 6.1.4 artifact is GPL-enabled and includes x264 and x265. Distributing an Android application with this dependency can trigger GPLv3 source, license, and redistribution obligations. Its published Maven metadata does not fully communicate that posture, so assess the binaries and their notices rather than relying only on the POM license field.
+
 FFmpeg's effective license depends on the enabled libraries, codecs, and build configuration. Before distributing an application:
 
 1. Review the license and notices shipped by each native dependency.
 2. Identify the codecs and linked libraries used by your product.
 3. Follow the applicable LGPL, GPL, attribution, relinking, and source-offer requirements.
-4. Reassess licensing if you replace either native dependency or add a GPL-enabled build.
+4. Treat the current Android build as GPL-enabled, and reassess licensing again if you replace either native dependency.
 
 See [FFmpeg legal guidance](https://ffmpeg.org/legal.html). This section is an engineering reminder, not legal advice.
 
@@ -499,6 +527,14 @@ Run the Expo example with:
 npm run example:ios
 # or
 npm run example:android
+```
+
+Releases are validated and published manually; this repository does not use GitHub Actions:
+
+```bash
+npm run check
+cd packages/munim-ffmpeg
+npm publish --access public
 ```
 
 Nitrogen output under `packages/munim-ffmpeg/nitrogen/generated` is committed. Change the `.nitro.ts` specification and rerun codegen instead of editing generated files directly.
