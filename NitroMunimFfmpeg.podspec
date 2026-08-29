@@ -24,12 +24,11 @@ Pod::Spec.new do |s|
     "cpp/**/*.{hpp,cpp}",
   ]
 
-  # FFmpeg 9 and the fftools core, built by scripts/ffmpeg/build-ios.sh.
-  s.vendored_libraries = "ios/vendor/lib/*.a"
-  s.preserve_paths = "ios/vendor/**/*"
+  # FFmpeg 9 and the in-process fftools core. Downloaded by
+  # scripts/fetch-binaries.mjs on install, or built by scripts/ffmpeg/build-all.sh.
+  s.vendored_frameworks = "ios/MunimFFmpeg.xcframework"
   s.pod_target_xcconfig = {
-    "HEADER_SEARCH_PATHS" => "\"$(PODS_TARGET_SRCROOT)/ios/vendor/include\" \"$(PODS_TARGET_SRCROOT)/ios\"",
-    "OTHER_LDFLAGS" => "-lbz2 -lz -liconv",
+    "HEADER_SEARCH_PATHS" => "\"$(PODS_TARGET_SRCROOT)/ios\"",
   }
   s.frameworks = "AudioToolbox", "VideoToolbox", "CoreMedia", "AVFoundation", "CoreVideo", "Security"
   s.libraries = "bz2", "z", "iconv", "c++"

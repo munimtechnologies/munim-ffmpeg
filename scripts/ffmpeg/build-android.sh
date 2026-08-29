@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+# Builds FFmpeg and the munim core for one Android ABI.
+#
+#   ./build-android.sh arm64-v8a
+#   ./build-android.sh armeabi-v7a
+#   ./build-android.sh x86_64
+#
+# Outputs land in $WORKSPACE/out/android-<abi> and are copied into
+# android/src/main/jniLibs/<abi> by package.sh.
+set -euo pipefail
+
+ABI="${1:-arm64-v8a}"
+NDK="${ANDROID_NDK:-/opt/homebrew/share/android-commandlinetools/ndk/27.1.12297006}"
+API="${ANDROID_API:-24}"
+HOST_TAG="$(ls "$NDK/toolchains/llvm/prebuilt" | head -1)"
+TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/$HOST_TAG"
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKSPACE="${FFMPEG_WORKSPACE:-$HOME/.munim-ffmpeg-build}"
+SOURCE="$WORKSPACE/ffmpeg-${FFMPEG_VERSION:-9.0.1}"
+DEPS="$WORKSPACE/deps"
+PREFIX="$WORKSPACE/out/android-$ABI"
+BUILD="$WORKSPACE/build/android-$ABI"
+JOBS="$(sysctl -n hw.ncpu 2>/dev/null || nproc)"
+
+case "$ABI" in
+  arm64-v8a)
+    TRIPLE=aarch64-linux-android; HOST=aarch64-linux-android
+    FF_ARCH=aarch64; FF_CPU=armv8-a; VPX_TARGET=arm64-android-gcc
+    EXTRA_CFLAGS=""
+    ;;
+  armeabi-v7a)
+    TRIPLE=armv7a-linux-androideabi; HOST=arm-linux-androideabi
+    FF_ARCH=arm; FF_CPU=armv7-a
+    # libvpx's armv7-android target passes -march=armv7-a, which NDK 27's clang
+    # rejects for this triple. generic-gnu builds portable C with our flags.
+    VPX_TARGET=generic-gnu
+    EXTRA_CFLAGS="-mfpu=neon -mfloat-abi=softfp"
+    ;;
+  x86_64)
+    TRIPLE=x86_64-linux-android; HOST=x86_64-linux-android
+    FF_ARCH=x86_64; FF_CPU=x86-64; VPX_TARGET=x86_64-android-gcc
+    EXTRA_CFLAGS=""
+    ;;
+  *)
+    echo "Unsupported ABI: $ABI" >&2; exit 1 ;;
+esac
+
+export CC="$TOOLCHAIN/bin/$TRIPLE$API-clang"
+export CXX="$TOOLCHAIN/bin/$TRIPLE$API-clang++"
+export AR="$TOOLCHAIN/bin/llvm-ar"
+export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
+export STRIP="$TOOLCHAIN/bin/llvm-strip"
+export NM="$TOOLCHAIN/bin/llvm-nm"
+export CFLAGS="-O2 -fPIC -DANDROID $EXTRA_CFLAGS"
+export CXXFLAGS="$CFLAGS"
+export LDFLAGS="-Wl,-z,max-page-size=16384"
+
+mkdir -p "$DEPS" "$PREFIX" "$WORKSPACE/build"
+test -d "$SOURCE" || { echo "FFmpeg source missing: $SOURCE (run fetch-source.sh)" >&2; exit 1; }
+
+fetch() { [ -f "$DEPS/$2" ] || curl -sL -o "$DEPS/$2" "$1"; }
+unpack() { rm -rf "$DEPS/$2"; mkdir -p "$DEPS/$2"; tar xf "$DEPS/$1" -C "$DEPS/$2" --strip-components=1; }
+
+echo "==> external libraries for $ABI"
+
+if [ ! -f "$PREFIX/lib/libmp3lame.a" ]; then
+  echo "  LAME"
+  fetch "https://downloads.sourceforge.net/project/lame/lame/3.100/lame-3.100.tar.gz" lame-3.100.tar.gz
+  unpack lame-3.100.tar.gz "lame-$ABI"
+  (
+    cd "$DEPS/lame-$ABI"
+    sed -i '' '/lame_init_old/d' include/libmp3lame.sym
+    ./configure --host="$HOST" --prefix="$PREFIX" --disable-shared --enable-static \
+      --disable-frontend --disable-analyzer-hooks
+    # LAME predates C99 and relies on implicit declarations. The force-includes
+    # only go in at compile time; in configure they break its probe programs.
+    make -j"$JOBS" CFLAGS="$CFLAGS -include string.h -include stdlib.h -Wno-implicit-function-declaration"
+    make install
+  ) > "$WORKSPACE/build/lame-$ABI.log" 2>&1
+fi
+
+if [ ! -f "$PREFIX/lib/libopus.a" ]; then
+  echo "  Opus"
+  fetch "https://downloads.xiph.org/releases/opus/opus-1.5.2.tar.gz" opus-1.5.2.tar.gz
+  unpack opus-1.5.2.tar.gz "opus-$ABI"
+  (
+    cd "$DEPS/opus-$ABI"
+    ./configure --host="$HOST" --prefix="$PREFIX" --disable-shared --enable-static \
+      --disable-doc --disable-extra-programs
+    make -j"$JOBS" && make install
+  ) > "$WORKSPACE/build/opus-$ABI.log" 2>&1
+fi
+
+if [ ! -f "$PREFIX/lib/libvpx.a" ]; then
+  echo "  libvpx"
+  fetch "https://github.com/webmproject/libvpx/archive/refs/tags/v1.15.0.tar.gz" libvpx-1.15.0.tar.gz
+  unpack libvpx-1.15.0.tar.gz "libvpx-$ABI"
+  (
+    cd "$DEPS/libvpx-$ABI"
+    # Runtime CPU detection stays on: disabling it bakes in instructions many
+    # devices lack, and the VP9 encoder then dies with SIGILL.
+    PATH="$TOOLCHAIN/bin:$PATH" ./configure --target="$VPX_TARGET" --prefix="$PREFIX" \
+      --disable-shared --enable-static --enable-pic \
+      --disable-examples --disable-tools --disable-docs --disable-unit-tests \
+      --enable-vp8 --enable-vp9 --enable-vp9-highbitdepth
+    make -j"$JOBS" && make install
+  ) > "$WORKSPACE/build/libvpx-$ABI.log" 2>&1
+fi
+
+if [ ! -f "$PREFIX/lib/libdav1d.a" ]; then
+  echo "  dav1d"
+  fetch "https://code.videolan.org/videolan/dav1d/-/archive/1.5.1/dav1d-1.5.1.tar.gz" dav1d-1.5.1.tar.gz
+  unpack dav1d-1.5.1.tar.gz "dav1d-$ABI"
+  (
+    cd "$DEPS/dav1d-$ABI"
+    case "$ABI" in
+      arm64-v8a)   MESON_CPU_FAMILY=aarch64; MESON_CPU=aarch64 ;;
+      armeabi-v7a) MESON_CPU_FAMILY=arm;     MESON_CPU=armv7 ;;
+      x86_64)      MESON_CPU_FAMILY=x86_64;  MESON_CPU=x86_64 ;;
+    esac
+    cat > cross.txt <<EOF
+[binaries]
+c = '$CC'
+cpp = '$CXX'
+ar = '$AR'
+strip = '$STRIP'
+[built-in options]
+c_args = [$(printf "'%s', " $CFLAGS | sed 's/, $//')]
+[host_machine]
+system = 'android'
+cpu_family = '$MESON_CPU_FAMILY'
+cpu = '$MESON_CPU'
+endian = 'little'
+EOF
+    meson setup build --cross-file cross.txt --prefix="$PREFIX" \
+      --default-library=static --buildtype=release \
+      -Denable_tools=false -Denable_tests=false
+    ninja -C build && ninja -C build install
+  ) > "$WORKSPACE/build/dav1d-$ABI.log" 2>&1
+fi
+
+if [ ! -f "$PREFIX/lib/libmbedtls.a" ]; then
+  echo "  mbedTLS"
+  fetch "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.2/mbedtls-3.6.2.tar.bz2" mbedtls-3.6.2.tar.bz2
+  unpack mbedtls-3.6.2.tar.bz2 "mbedtls-$ABI"
+  (
+    cd "$DEPS/mbedtls-$ABI"
+    cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
+      -DANDROID_ABI="$ABI" -DANDROID_PLATFORM="android-$API" \
+      -DCMAKE_INSTALL_PREFIX="$PREFIX" -DUSE_SHARED_MBEDTLS_LIBRARY=OFF \
+      -DENABLE_TESTING=OFF -DENABLE_PROGRAMS=OFF -DCMAKE_BUILD_TYPE=Release
+    cmake --build build -j"$JOBS" && cmake --install build
+  ) > "$WORKSPACE/build/mbedtls-$ABI.log" 2>&1
+fi
+
+echo "==> FFmpeg for $ABI"
+# configure probes the external libraries through pkg-config.
+export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig"
+rm -rf "$BUILD"; mkdir -p "$BUILD"; cd "$BUILD"
+
+"$SOURCE/configure" \
+  --prefix="$PREFIX" \
+  --target-os=android \
+  --arch="$FF_ARCH" \
+  --cpu="$FF_CPU" \
+  --enable-cross-compile \
+  --sysroot="$TOOLCHAIN/sysroot" \
+  --cc="$CC" --cxx="$CXX" --ar="$AR" --nm="$NM" --ranlib="$RANLIB" --strip="$STRIP" \
+  --extra-cflags="$CFLAGS -I$PREFIX/include" \
+  --extra-ldflags="$LDFLAGS -L$PREFIX/lib" \
+  --pkg-config-flags=--static \
+  --disable-autodetect \
+  --enable-shared --disable-static --enable-pic \
+  --enable-asm --enable-inline-asm \
+  --enable-jni --enable-mediacodec \
+  --enable-zlib --enable-libmp3lame --enable-libopus --enable-libvpx \
+  --enable-libdav1d --enable-mbedtls --enable-version3 \
+  --enable-pthreads --enable-swscale --enable-avfilter --enable-network \
+  --enable-protocol=file,pipe,http,tcp,https,tls,crypto,data,concat,concatf \
+  --disable-programs --disable-doc --disable-debug --disable-vulkan \
+  --disable-v4l2-m2m --disable-indev=android_camera \
+  > "$WORKSPACE/build/ffmpeg-$ABI-configure.log" 2>&1
+
+make -j"$JOBS" > "$WORKSPACE/build/ffmpeg-$ABI.log" 2>&1
+make install >> "$WORKSPACE/build/ffmpeg-$ABI.log" 2>&1
+
+echo "==> fftools + core for $ABI"
+PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" \
+  "$HERE/build-android-fftools.sh" "$ABI"
+
+echo "Done: $PREFIX"

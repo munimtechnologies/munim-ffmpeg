@@ -5,6 +5,9 @@
   "main": "lib/index",
   "module": "lib/index",
   "types": "lib/index.d.ts",
+  "bin": {
+    "munim-ffmpeg-fetch-binaries": "scripts/fetch-binaries.mjs"
+  },
   "react-native": "src/index",
   "source": "src/index",
   "files": [
@@ -29,7 +32,9 @@
     "README.md",
     "LICENSE",
     "android/src/main/cpp",
-    "android/src/main/AndroidManifest.xml"
+    "android/src/main/AndroidManifest.xml",
+    "scripts/fetch-binaries.mjs",
+    "scripts/binaries.json"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -45,7 +50,10 @@
     "example:ios": "npm --workspace example run ios",
     "example:android": "npm --workspace example run android",
     "release:local": "node scripts/release-local.mjs",
-    "format": "prettier --write \"**/*.{ts,tsx,js,cjs,mjs,json,md}\""
+    "format": "prettier --write \"**/*.{ts,tsx,js,cjs,mjs,json,md}\"",
+    "postinstall": "node scripts/fetch-binaries.mjs",
+    "binaries:build": "scripts/ffmpeg/fetch-source.sh && scripts/ffmpeg/build-all.sh",
+    "binaries:package": "scripts/ffmpeg/package.sh"
   },
   "keywords": [
     "react-native",

@@ -49,11 +49,29 @@ module.exports = {
       },
     ],
     '@semantic-release/npm',
-    '@semantic-release/github',
+    [
+      '@semantic-release/github',
+      {
+        // The native binaries are ~200 MB and ship as a release asset rather
+        // than inside the npm tarball; scripts/fetch-binaries.mjs downloads
+        // this file and checks it against scripts/binaries.json.
+        assets: [
+          {
+            path: 'dist-binaries/munim-ffmpeg-binaries.tar.gz',
+            label: 'Prebuilt FFmpeg binaries (iOS + Android)',
+          },
+        ],
+      },
+    ],
     [
       '@semantic-release/git',
       {
-        assets: ['package.json', 'CHANGELOG.md', 'example/package.json'],
+        assets: [
+          'package.json',
+          'CHANGELOG.md',
+          'example/package.json',
+          'scripts/binaries.json',
+        ],
       },
     ],
   ],

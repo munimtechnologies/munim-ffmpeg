@@ -61,7 +61,7 @@
 
 **Designed for Expo development builds and bare React Native.** This package contains native code and cannot run in Expo Go.
 
-> **Licensing note:** The JavaScript and Nitro bridge are Apache-2.0. The bundled native FFmpeg builds are not: the Android artifact is **GPLv3** (it links x264, x265, and xvid) and the iOS artifact is **LGPLv3**. Distributing either carries obligations. Read [Bundled FFmpeg builds](#bundled-ffmpeg-builds) before shipping.
+> **Licensing note:** The JavaScript, Swift, Kotlin, and Nitro bridge are Apache-2.0. The bundled FFmpeg is **LGPLv3** on both platforms — it deliberately excludes x264, x265, and xvid, so your app does not inherit GPL obligations. See [Licensing](#licensing).
 
 ## Table of contents
 
@@ -92,7 +92,8 @@
 
 ### FFmpeg execution
 
-- 🎬 **Argument-array commands:** Avoid platform-specific shell parsing and quoting
+- 🎬 **Argument-array commands:** FFmpeg's own CLI code paths, without shell parsing or quoting
+- 🆕 **FFmpeg 9.0.1:** The current upstream release, identical on both platforms
 - ⚡ **Asynchronous sessions:** Keep the React Native thread responsive during native work
 - 📝 **Live logs:** Receive FFmpeg output as it is produced
 - 📈 **Encoding statistics:** Track time, size, bitrate, speed, frames, FPS, and quality
@@ -112,7 +113,7 @@
 - 🚀 **Expo compatible:** Autolinking, config plugin, and an Expo development example
 - 🧪 **Capability discovery:** Ask the bundled build which encoders and decoders it actually has
 - 🎯 **TypeScript:** Complete public callback and result types
-- 🗂️ **16 KB Android support:** Uses a maintained FFmpegKit-compatible Android artifact with 16 KB page-size support
+- 🗂️ **16 KB Android pages:** Built with the alignment Google Play requires
 
 ## Platform support matrix
 
@@ -135,53 +136,46 @@ Codec availability is determined by the native FFmpeg builds described in [Bundl
 
 ## Bundled FFmpeg builds
 
-FFmpegKit was retired upstream in 2025 and its official binaries were withdrawn, so this package depends on maintained community rebuilds. The two platforms are **not** the same build:
+Both platforms run **FFmpeg 9.0.1**, built from [ffmpeg.org](https://www.ffmpeg.org/) by the scripts in [`scripts/ffmpeg/`](./scripts/ffmpeg). There is no FFmpegKit here: that project was retired in 2025 and pinned to FFmpeg 6.0.
 
 | | iOS | Android |
 | --- | --- | --- |
-| Artifact | `ffmpeg-kit-ios-full-gpl-alt` 6.0 | `io.github.jamaismagic.ffmpeg:ffmpeg-kit-main-16kb` 6.1.7 |
-| FFmpeg | n6.0 | n6.1.4 |
-| Effective license | LGPLv3 | **GPLv3** |
+| FFmpeg | 9.0.1 | 9.0.1 |
+| Architectures | arm64 device, arm64 + x86_64 simulator | arm64-v8a, armeabi-v7a, x86_64 |
 | Hardware codecs | VideoToolbox, AudioToolbox | MediaCodec |
-| 16 KB page size | n/a | ✅ (required by Google Play) |
+| TLS | SecureTransport | mbedTLS |
+| Minimum | iOS 15.1 | API 24, 16 KB pages |
 
-Despite its name, the iOS pod ships FFmpeg's non-GPL configuration: it has no `libx264`, `libx265`, or `libxvid`. No public GPL build of FFmpegKit for iOS exists since the upstream retirement.
+Linked libraries, identical on both: **LAME** (MP3), **Opus**, **libvpx** (VP8/VP9), **dav1d** (AV1 decoding), plus everything FFmpeg builds natively.
+
+FFmpeg's own `ffmpeg` and `ffprobe` tools are compiled to run inside your app process, so the argument arrays you pass are handled by the real command-line code paths rather than a reimplementation.
 
 ### Encoders
 
-Verified by running the example's device suite on both platforms: iOS reports 201 encoders, Android 196, with 181 in common. Everything FFmpeg builds natively (`aac`, `alac`, `flac`, `mpeg4`, `mjpeg`, `png`, `gif`, `pcm_*`, …) is available on both, as are `libmp3lame`, `libopus`, `libvpx` (VP8), and `libvpx-vp9`.
+Verified by running the example's device suite: iOS reports 186 encoders, Android 184. Everything FFmpeg builds natively (`aac`, `alac`, `flac`, `mpeg4`, `mjpeg`, `png`, `gif`, `pcm_*`, …) is on both, as are `libmp3lame`, `libopus`, `libvpx`, and `libvpx-vp9`.
 
-The differences that matter:
+H.264 and HEVC come from the platform's hardware encoder, which is faster and smaller than bundling x264 — and keeps the package LGPL:
 
 | Encoder | iOS | Android |
 | --- | --- | --- |
-| `libx264` / `libx264rgb` (H.264, software) | ❌ | ✅ |
-| `libx265` (HEVC, software) | ❌ | ✅ |
 | `h264_videotoolbox`, `hevc_videotoolbox`, `prores_videotoolbox` | ✅ | ❌ |
-| `h264_mediacodec`, `hevc_mediacodec`, `vp8_mediacodec`, `vp9_mediacodec`, `av1_mediacodec` | ❌ | ✅ |
-| `libkvazaar` (HEVC, software) | ✅ | ❌ |
-| `libtheora`, `libvorbis`, `libwebp` | ✅ | ❌ |
-| `libspeex`, `libshine`, `libtwolame`, `libilbc`, `libopencore_amrnb`, `libvo_amrwbenc` | ✅ | ❌ |
-| `aac_at`, `alac_at`, `ilbc_at` (AudioToolbox) | ✅ | ❌ |
+| `h264_mediacodec`, `hevc_mediacodec`, `vp8_mediacodec`, `vp9_mediacodec` | ❌ | ✅ |
+| `aac_at`, `alac_at` (AudioToolbox) | ✅ | ❌ |
 
-iOS additionally links libass, so subtitle burn-in filters work there but not on Android.
-
-Both platforms can encode H.264 and HEVC — just not with the same encoder name. Resolve it at runtime instead of branching on `Platform.OS`:
+Resolve the name at runtime instead of branching on `Platform.OS`:
 
 ```typescript
 import { execute, pickEncoder } from 'munim-ffmpeg'
 
-const h264 = await pickEncoder(['libx264', 'h264_videotoolbox'])
+const h264 = await pickEncoder(['h264_videotoolbox', 'h264_mediacodec'])
 if (!h264) throw new Error('No H.264 encoder in this build')
 
 await execute(['-y', '-i', inputPath, '-c:v', h264, outputPath])
 ```
 
-Decoding is far more uniform: both builds decode H.264, HEVC, VP8/VP9, AV1 (`libdav1d`), MPEG-4, MP3, AAC, Vorbis, Opus, FLAC, and the usual container formats. Both link GnuTLS, so `https://` inputs work.
+Two things to know about hardware encoders: they want NV12 input on Android (`-pix_fmt nv12`) and planar YUV on iOS, and they reject very small frames — 176×144 is the smallest size that works everywhere.
 
-The Android build is compiled with `--disable-indev=lavfi`, so `-f lavfi -i testsrc=...` and other virtual inputs are iOS-only. Feed real files or raw frames instead.
-
-> **Avoid the `-full` and `-full-gpl` Android artifacts.** Their `libavdevice.so` references hidapi symbols that nothing in the package provides, so FFmpegKit fails to initialise at runtime with `UnsatisfiedLinkError: cannot locate symbol "PLATFORM_hid_write"`.
+Decoding is uniform: H.264, HEVC, VP8/VP9, AV1, MPEG-4, MP3, AAC, Vorbis, Opus, FLAC and the usual containers, on both platforms. Both link TLS, so `https://` inputs work.
 
 ## 📦 Installation
 
@@ -201,7 +195,7 @@ pod install
 cd ..
 ```
 
-FFmpegKit and React Native both provide `libc++_shared.so`. Resolve that duplicate in the Android application module:
+FFmpeg and React Native both provide `libc++_shared.so`. Resolve that duplicate in the Android application module:
 
 ```groovy
 android {
@@ -229,7 +223,7 @@ The package includes an Expo config plugin. If your project manages its plugin l
 }
 ```
 
-The plugin also configures Android to select one shared C++ runtime when React Native and FFmpegKit contribute the same `libc++_shared.so` path.
+The plugin also configures Android to select one shared C++ runtime when React Native and FFmpeg contribute the same `libc++_shared.so` path.
 
 Create a native development build after installation:
 
@@ -243,6 +237,25 @@ npx expo run:android
 You can also create an [EAS development build](https://docs.expo.dev/develop/development-builds/create-a-build/).
 
 > **Important:** `munim-ffmpeg` cannot run in Expo Go because Expo Go does not include this package's native libraries.
+
+### Native binaries
+
+The FFmpeg libraries are around 200 MB across all six architectures, which does not belong in an npm tarball, so they are downloaded from the matching GitHub release when the package installs and verified against the checksum in `scripts/binaries.json`.
+
+If your environment blocks install scripts (`npm install --ignore-scripts`), fetch them explicitly:
+
+```bash
+npx munim-ffmpeg-fetch-binaries
+```
+
+Behind a proxy or an air-gapped mirror, point the fetcher somewhere else:
+
+```bash
+MUNIM_FFMPEG_BINARIES_URL=https://internal.example.com/munim-ffmpeg-binaries.tar.gz \
+  npx munim-ffmpeg-fetch-binaries
+```
+
+Or build them yourself — see [`scripts/ffmpeg/README.md`](./scripts/ffmpeg/README.md).
 
 ### Requirements
 
@@ -580,25 +593,15 @@ if (result.success) {
 
 ## Licensing
 
-The JavaScript, TypeScript, Swift, Kotlin, and generated Nitro bridge code in this repository are Apache-2.0. The native FFmpeg binaries are not, and the two platforms differ:
+The JavaScript, TypeScript, Swift, Kotlin, C core, and generated Nitro bridge in this repository are Apache-2.0.
 
-| Platform | Native dependency | Version | Effective license |
-| -------- | ----------------- | ------- | ----------------- |
-| iOS      | `ffmpeg-kit-ios-full-gpl-alt` | 6.0 | LGPLv3 (`--enable-version3`, no GPL libraries linked) |
-| Android  | `io.github.jamaismagic.ffmpeg:ffmpeg-kit-main-16kb` | 6.1.7 | **GPLv3** (`--enable-gpl` with x264 and x265) |
+The bundled FFmpeg 9.0.1 is **LGPLv3**, on both platforms. It is configured without `--enable-gpl`, so no x264, x265, xvid, or vid.stab: H.264 and HEVC encoding come from VideoToolbox and MediaCodec instead. The external libraries it does link are LAME (LGPL), Opus (BSD), libvpx (BSD), dav1d (BSD), and mbedTLS (Apache-2.0) on Android.
 
-The Android artifact's published Maven metadata claims LGPL-3.0. That metadata is wrong: the shipped `libavcodec.so` is configured with `--enable-gpl` and the AAR bundles the x264 and x265 license notices. Treat the Android build as GPLv3.
+In practice that means your application does **not** inherit GPL obligations. LGPL still applies: the FFmpeg libraries are linked and their license and notices must be conveyed with your app, and users must be able to relink against a modified FFmpeg. The exact configuration used is recorded in [`scripts/ffmpeg/build-ios.sh`](./scripts/ffmpeg/build-ios.sh) and [`build-android.sh`](./scripts/ffmpeg/build-android.sh), and the binaries can be reproduced from them.
 
-Distributing an Android application built against it can trigger GPLv3 source, license, and redistribution obligations for your application. If that does not suit your product, replace the Android dependency in `android/build.gradle` with a non-GPL FFmpegKit artifact; H.264 encoding then relies on `h264_mediacodec`.
+If you need x264 or x265, add `--enable-gpl --enable-libx264 --enable-libx265` to those scripts and rebuild — but then your application does inherit GPLv3.
 
-Before distributing an application:
-
-1. Review the license and notices shipped by each native dependency.
-2. Identify the codecs and linked libraries your product actually uses.
-3. Follow the applicable LGPL, GPL, attribution, relinking, and source-offer requirements.
-4. Reassess licensing whenever you replace a native dependency.
-
-See [FFmpeg legal guidance](https://ffmpeg.org/legal.html). This section is an engineering reminder, not legal advice.
+See [FFmpeg legal guidance](https://ffmpeg.org/legal.html). This section is an engineering summary, not legal advice.
 
 ## 🔍 Troubleshooting
 
@@ -628,31 +631,15 @@ Inspect `result.success`, `result.cancelled`, `result.returnCode`, `result.outpu
 
 ### iOS pod or build errors
 
-Run `pod install` after installation and rebuild from a clean native development build. The package includes a narrowly scoped Xcode 26 compatibility patch for the FFmpegKit `Level` enum, which Nitro's Swift/C++ bridge otherwise rejects. The patch locates the header by globbing, so it keeps working if you swap the FFmpegKit pod.
-
-### `building for iOS Simulator, but linking ... built for iOS`
-
-The FFmpegKit pod tells consuming apps to exclude `arm64` from Simulator builds, which breaks Apple Silicon Macs even though its xcframework contains an `arm64` Simulator slice. The Expo config plugin removes that exclusion automatically. In a bare React Native app, add the same fix to your `Podfile`:
-
-```ruby
-post_install do |installer|
-  installer.pods_project.build_configurations.each do |config|
-    config.build_settings.delete('EXCLUDED_ARCHS[sdk=iphonesimulator*]')
-  end
-  installer.aggregate_targets.each do |aggregate_target|
-    aggregate_target.xcconfigs.each do |config_name, xcconfig|
-      xcconfig.attributes.delete('EXCLUDED_ARCHS[sdk=iphonesimulator*]')
-      xcconfig.save_as(Pathname.new(aggregate_target.xcconfig_path(config_name)))
-    end
-  end
-end
-```
+Run `pod install` after installation and rebuild from a clean native development build. If the linker cannot find `MunimFFmpeg.xcframework`, the native binaries were not downloaded — run `npx munim-ffmpeg-fetch-binaries`.
 
 ### Android build errors
 
 Use Android API 24 or newer, JDK 17, and the React Native New Architecture. Clear stale Gradle build output after changing native dependency versions.
 
-If the build fails on duplicate `libc++_shared.so`, make sure the config plugin ran (Expo) or add `android.packagingOptions.pickFirsts=**/libc++_shared.so` to `gradle.properties` (bare React Native). FFmpegKit and React Native both ship that library.
+If the build fails on duplicate `libc++_shared.so`, make sure the config plugin ran (Expo) or add `android.packagingOptions.pickFirsts=**/libc++_shared.so` to `gradle.properties` (bare React Native).
+
+If `System.loadLibrary` cannot find `munimffmpeg9`, the native binaries were not downloaded — run `npx munim-ffmpeg-fetch-binaries`.
 
 ## Development
 
@@ -677,6 +664,15 @@ npm run example:android
 
 FFmpeg encoding is slow in a simulator or emulator; run the suite on a physical device.
 
+### Rebuilding FFmpeg
+
+```bash
+npm run binaries:build     # every architecture, ~40 minutes
+npm run binaries:package   # bundles them and records the checksum
+```
+
+See [`scripts/ffmpeg/README.md`](./scripts/ffmpeg/README.md) for what the build does and the platform quirks it works around.
+
 ### Releasing
 
 Releases run locally from a clean `main`; this repository does not use GitHub Actions.
@@ -686,7 +682,7 @@ npm run check
 npm run release:local
 ```
 
-`release:local` runs semantic-release with the npm token from the macOS Keychain and the GitHub CLI token, so commit messages must follow Conventional Commits.
+`release:local` runs semantic-release with the npm token from the macOS Keychain and the GitHub CLI token, so commit messages must follow Conventional Commits. It also uploads `dist-binaries/munim-ffmpeg-binaries.tar.gz` to the GitHub release, which is where `postinstall` fetches it from — so run `npm run binaries:package` first.
 
 ## 👏 Contributing
 
