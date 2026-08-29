@@ -1,3 +1,13 @@
+## [0.4.0](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.3.1...v0.4.0) (2026-08-29)
+
+### ✨ Features
+
+* add libopenh264 so H.264 encoding works without hardware ([2b3d73f](https://github.com/munimtechnologies/munim-ffmpeg/commit/2b3d73fa2bb1443d072d58bf925b5a841e68220f))
+
+### 🛠️ Other changes
+
+* sync package-lock with the 0.3.1 release ([a7ff3ad](https://github.com/munimtechnologies/munim-ffmpeg/commit/a7ff3adcb6a27964559a8269ed62d6aed2b34622))
+
 ## [0.3.1](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.3.0...v0.3.1) (2026-08-29)
 
 ### 📚 Documentation
