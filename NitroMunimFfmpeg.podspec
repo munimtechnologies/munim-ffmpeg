@@ -18,25 +18,31 @@ Pod::Spec.new do |s|
     "ios/**/*.{swift}",
     # Autolinking/Registration (Objective-C++)
     "ios/**/*.{m,mm}",
+    # C core that drives FFmpeg's in-process command-line tools
+    "ios/*.h",
     # Implementation (C++ objects)
     "cpp/**/*.{hpp,cpp}",
   ]
+
+  # FFmpeg 9 and the fftools core, built by scripts/ffmpeg/build-ios.sh.
+  s.vendored_libraries = "ios/vendor/lib/*.a"
+  s.preserve_paths = "ios/vendor/**/*"
+  s.pod_target_xcconfig = {
+    "HEADER_SEARCH_PATHS" => "\"$(PODS_TARGET_SRCROOT)/ios/vendor/include\" \"$(PODS_TARGET_SRCROOT)/ios\"",
+    "OTHER_LDFLAGS" => "-lbz2 -lz -liconv",
+  }
+  s.frameworks = "AudioToolbox", "VideoToolbox", "CoreMedia", "AVFoundation", "CoreVideo", "Security"
+  s.libraries = "bz2", "z", "iconv", "c++"
+
+  # Must be public so CocoaPods puts it in the module umbrella, which is how the
+  # Swift implementation sees the C core.
+  s.public_header_files = "ios/munim_ffmpeg_core.h"
 
   load 'nitrogen/generated/ios/NitroMunimFfmpeg+autolinking.rb'
   add_nitrogen_files(s)
 
   s.dependency 'React-jsi'
   s.dependency 'React-callinvoker'
-  s.dependency 'ffmpeg-kit-ios-full-gpl-alt', '6.0'
-
-  # ffmpeg-kit 6.0 declares negative Level values with an unsigned backing type.
-  # Xcode 26 rejects that header when Nitro enables Swift C++ interoperability.
-  # The script locates Level.h by globbing, so it survives a change of FFmpegKit pod.
-  s.script_phase = {
-    :name => 'Patch FFmpegKit Level enum for Xcode 26',
-    :script => '"${RUBY_EXECUTABLE:-/usr/bin/ruby}" "${PODS_TARGET_SRCROOT}/scripts/patch-ffmpegkit-level.rb"',
-    :execution_position => :before_compile,
-  }
 
   install_modules_dependencies(s)
 end

@@ -27,8 +27,7 @@
     "nitro.json",
     "*.podspec",
     "README.md",
-    "LICENSE",
-    "scripts/patch-ffmpegkit-level.rb"
+    "LICENSE"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",

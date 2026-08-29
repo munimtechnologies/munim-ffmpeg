@@ -1,19 +1,39 @@
 package com.margelo.nitro.munimffmpeg
 
 import androidx.annotation.Keep
-import com.arthenica.ffmpegkit.FFmpegKit
-import com.arthenica.ffmpegkit.FFmpegKitConfig
-import com.arthenica.ffmpegkit.FFprobeKit
-import com.arthenica.ffmpegkit.ReturnCode
-import com.arthenica.ffmpegkit.Session
 import com.facebook.proguard.annotations.DoNotStrip
 import com.margelo.nitro.core.Promise
+import java.io.File
+import java.util.concurrent.atomic.AtomicLong
 
 @Keep
 @DoNotStrip
 class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
   override val ffmpegVersion: String
-    get() = FFmpegKitConfig.getFFmpegVersion()
+    get() = FFmpegNative.nativeVersion()
+
+  private val sessions = AtomicLong(0)
+
+  private fun nextSession() = sessions.incrementAndGet().toDouble()
+
+  private fun result(
+    sessionId: Double,
+    returnCode: Int,
+    output: String,
+    durationMs: Long,
+  ): FFmpegSessionResult {
+    val cancelled = returnCode == FFmpegNative.CANCELLED
+    return FFmpegSessionResult(
+      sessionId = sessionId,
+      returnCode = returnCode.toDouble(),
+      success = returnCode == 0,
+      cancelled = cancelled,
+      state = "completed",
+      durationMs = durationMs.toDouble(),
+      output = output,
+      failStackTrace = null,
+    )
+  }
 
   override fun execute(
     arguments_: Array<String>,
@@ -29,31 +49,42 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
     ) -> Unit)?,
     onSessionCreated: ((sessionId: Double) -> Unit)?,
   ): Promise<FFmpegSessionResult> {
-    val promise = Promise<FFmpegSessionResult>()
+    val sessionId = nextSession()
+    onSessionCreated?.invoke(sessionId)
 
-    try {
-      val session = FFmpegKit.executeWithArgumentsAsync(
-        arguments_,
-        { session -> promise.resolve(session.toResult()) },
-        { log -> onLog?.invoke(log.message) },
-        { statistics ->
+    return Promise.async {
+      val output = StringBuilder()
+      val startedAt = System.currentTimeMillis()
+      // ffmpeg prints reports such as -encoders and -protocols to stdout rather
+      // than through its logger, so it is captured to a file and appended.
+      val stdout = File.createTempFile("munim-ffmpeg", ".txt")
+
+      val returnCode = FFmpegNative.withCallbacks(
+        onLog = { message ->
+          output.append(message)
+          onLog?.invoke(message)
+        },
+        onStatistics = { statistics ->
           onStatistics?.invoke(
-            statistics.time,
-            statistics.size.toDouble(),
-            statistics.bitrate,
+            statistics.timeMs,
+            statistics.sizeBytes,
+            statistics.bitrateKbits,
             statistics.speed,
-            statistics.videoFrameNumber.toDouble(),
-            statistics.videoFps.toDouble(),
-            statistics.videoQuality.toDouble(),
+            statistics.videoFrameNumber,
+            statistics.fps,
+            statistics.quality,
           )
         },
-      )
-      onSessionCreated?.invoke(session.sessionId.toDouble())
-    } catch (error: Throwable) {
-      promise.reject(error)
-    }
+      ) {
+        FFmpegNative.nativeExecute(arguments_, stdout.absolutePath)
+      }
 
-    return promise
+      val printed = runCatching { stdout.readText() }.getOrDefault("")
+      stdout.delete()
+      output.append(printed)
+
+      result(sessionId, returnCode, output.toString(), System.currentTimeMillis() - startedAt)
+    }
   }
 
   override fun probe(
@@ -61,25 +92,19 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
     onLog: ((message: String) -> Unit)?,
     onSessionCreated: ((sessionId: Double) -> Unit)?,
   ): Promise<FFmpegSessionResult> {
-    val promise = Promise<FFmpegSessionResult>()
+    val sessionId = nextSession()
+    onSessionCreated?.invoke(sessionId)
 
-    try {
-      val session = FFprobeKit.executeWithArgumentsAsync(
-        arguments_,
-        { session -> promise.resolve(session.toResult()) },
-        { log -> onLog?.invoke(log.message) },
-      )
-      onSessionCreated?.invoke(session.sessionId.toDouble())
-    } catch (error: Throwable) {
-      promise.reject(error)
+    return Promise.async {
+      val startedAt = System.currentTimeMillis()
+      val (returnCode, report) = runProbe(arguments_, onLog)
+      result(sessionId, returnCode, report, System.currentTimeMillis() - startedAt)
     }
-
-    return promise
   }
 
   override fun getMediaInformation(path: String): Promise<String> {
     return Promise.async {
-      val session = FFprobeKit.executeWithArguments(
+      val (returnCode, report) = runProbe(
         arrayOf(
           "-v",
           "error",
@@ -90,25 +115,49 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
           "-show_chapters",
           path,
         ),
+        null,
       )
-      val returnCode = session.returnCode
 
-      if (!ReturnCode.isSuccess(returnCode)) {
+      if (returnCode != 0) {
         throw IllegalStateException(
-          session.failStackTrace ?: session.output.ifEmpty {
-            "FFprobe failed with return code ${returnCode?.value ?: -1}"
-          },
+          report.ifEmpty { "FFprobe failed with return code $returnCode" }
         )
       }
 
-      session.output
+      report
+    }
+  }
+
+  /**
+   * ffprobe writes its report to stdout, which is not reachable from an app, so
+   * it is pointed at a temporary file with `-o` and read back.
+   */
+  private fun runProbe(
+    arguments: Array<String>,
+    onLog: ((message: String) -> Unit)?,
+  ): Pair<Int, String> {
+    val destination = File.createTempFile("munim-ffprobe", ".txt")
+    try {
+      val logs = StringBuilder()
+      val returnCode = FFmpegNative.withCallbacks(
+        onLog = { message ->
+          logs.append(message)
+          onLog?.invoke(message)
+        },
+        onStatistics = null,
+      ) {
+        FFmpegNative.nativeExecuteProbe(arguments, destination.absolutePath)
+      }
+
+      val report = destination.readText()
+      return returnCode to report.ifEmpty { logs.toString() }
+    } finally {
+      destination.delete()
     }
   }
 
   override fun cancel(sessionId: Double?) {
-    if (sessionId == null) {
-      FFmpegKit.cancel()
-    } else {
+    if (sessionId != null) {
       require(
         sessionId.isFinite() &&
           sessionId > 0 &&
@@ -117,25 +166,13 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
       ) {
         "Invalid FFmpeg session ID: $sessionId. Expected a positive safe integer."
       }
-      FFmpegKit.cancel(sessionId.toLong())
     }
+    // Only one execution runs at a time, so a targeted cancel and cancelAll()
+    // are the same operation.
+    FFmpegNative.nativeCancel()
   }
 
   override fun cancelAll() {
-    FFmpegKit.cancel()
-  }
-
-  private fun Session.toResult(): FFmpegSessionResult {
-    val code = returnCode
-    return FFmpegSessionResult(
-      sessionId = sessionId.toDouble(),
-      returnCode = (code?.value ?: -1).toDouble(),
-      success = ReturnCode.isSuccess(code),
-      cancelled = ReturnCode.isCancel(code),
-      state = state.name.lowercase(),
-      durationMs = duration.toDouble(),
-      output = output,
-      failStackTrace = failStackTrace,
-    )
+    FFmpegNative.nativeCancel()
   }
 }

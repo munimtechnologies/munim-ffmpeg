@@ -756,7 +756,7 @@ export async function runSuite(
       const results = await Promise.all(running)
       assert(
         results.every((result) => result.cancelled),
-        `states: ${results.map((result) => result.state).join(', ')}`
+        `cancelled flags: ${results.map((result) => result.cancelled).join(', ')}`
       )
       return `${results.length} sessions cancelled`
     })

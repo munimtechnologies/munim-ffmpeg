@@ -139,9 +139,6 @@ dependencies {
   // Add a dependency on NitroModules
   implementation project(":react-native-nitro-modules")
 
-  // Maintained FFmpegKit-compatible Android artifact with 16 KB page support.
-  // Do not move to the `-full`/`-full-gpl` variants: their libavdevice.so
-  // references hidapi symbols that nothing provides, so FFmpegKit fails to load
-  // at runtime with UnsatisfiedLinkError.
-  implementation "io.github.jamaismagic.ffmpeg:ffmpeg-kit-main-16kb:6.1.7"
+  // FFmpeg 9 and the in-process fftools core ship as prebuilt .so files in
+  // src/main/jniLibs; see scripts/ffmpeg/ for the build.
 }
