@@ -43,7 +43,7 @@ Pods/
 vendor/
 
 # TypeScript build output
-packages/*/lib/
+lib/
 *.tsbuildinfo
 
 # Test coverage

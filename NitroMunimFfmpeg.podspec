@@ -27,10 +27,11 @@ Pod::Spec.new do |s|
 
   s.dependency 'React-jsi'
   s.dependency 'React-callinvoker'
-  s.dependency 'ffmpeg-kit-ios-https-alt', '6.0'
+  s.dependency 'ffmpeg-kit-ios-full-gpl-alt', '6.0'
 
   # ffmpeg-kit 6.0 declares negative Level values with an unsigned backing type.
   # Xcode 26 rejects that header when Nitro enables Swift C++ interoperability.
+  # The script locates Level.h by globbing, so it survives a change of FFmpegKit pod.
   s.script_phase = {
     :name => 'Patch FFmpegKit Level enum for Xcode 26',
     :script => '"${RUBY_EXECUTABLE:-/usr/bin/ruby}" "${PODS_TARGET_SRCROOT}/scripts/patch-ffmpegkit-level.rb"',

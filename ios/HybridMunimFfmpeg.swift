@@ -128,6 +128,18 @@ final class HybridMunimFfmpeg: HybridMunimFfmpegSpec {
     FFmpegKit.cancel()
   }
 
+  // `String(describing:)` on the imported NS_ENUM yields "sessionstate(rawvalue: 3)".
+  // Android reports the Java enum name, so map to the same lowercase names here.
+  private static func stateName(_ state: SessionState) -> String {
+    switch state {
+    case .created: return "created"
+    case .running: return "running"
+    case .failed: return "failed"
+    case .completed: return "completed"
+    @unknown default: return "unknown"
+    }
+  }
+
   private static func result(from session: Session) -> FFmpegSessionResult {
     let returnCode = session.getReturnCode()
     return FFmpegSessionResult(
@@ -135,7 +147,7 @@ final class HybridMunimFfmpeg: HybridMunimFfmpegSpec {
       returnCode: Double(returnCode?.getValue() ?? -1),
       success: ReturnCode.isSuccess(returnCode),
       cancelled: ReturnCode.isCancel(returnCode),
-      state: String(describing: session.getState()).lowercased(),
+      state: Self.stateName(session.getState()),
       durationMs: Double(session.getDuration()),
       output: session.getOutput() ?? "",
       failStackTrace: session.getFailStackTrace()

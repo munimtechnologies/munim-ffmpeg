@@ -61,19 +61,20 @@
 
 **Designed for Expo development builds and bare React Native.** This package contains native code and cannot run in Expo Go.
 
-> **Licensing note:** The JavaScript and Nitro bridge are Apache-2.0. The bundled Android artifact is GPL-enabled and includes x264/x265; distributing it can trigger GPLv3 obligations. The native dependencies and FFmpeg retain their own licenses. Review [Native dependencies and licensing](#native-dependencies-and-licensing) before distributing an app.
+> **Licensing note:** The JavaScript and Nitro bridge are Apache-2.0. The bundled native FFmpeg builds are not: the Android artifact is **GPLv3** (it links x264, x265, and xvid) and the iOS artifact is **LGPLv3**. Distributing either carries obligations. Read [Bundled FFmpeg builds](#bundled-ffmpeg-builds) before shipping.
 
 ## Table of contents
 
 - [📚 Documentation](#-documentation)
 - [🚀 Features](#-features)
 - [Platform support matrix](#platform-support-matrix)
+- [Bundled FFmpeg builds](#bundled-ffmpeg-builds)
 - [📦 Installation](#-installation)
 - [Working with media paths](#working-with-media-paths)
 - [⚡ Quick start](#-quick-start)
 - [🔧 API reference](#-api-reference)
 - [📖 Usage examples](#-usage-examples)
-- [Native dependencies and licensing](#native-dependencies-and-licensing)
+- [Licensing](#licensing)
 - [🔍 Troubleshooting](#-troubleshooting)
 - [Development](#development)
 - [👏 Contributing](#-contributing)
@@ -109,6 +110,7 @@
 - 📱 **iOS and Android:** Native implementations in Swift and Kotlin
 - 🧬 **Nitro Modules:** Generated high-performance native bindings
 - 🚀 **Expo compatible:** Autolinking, config plugin, and an Expo development example
+- 🧪 **Capability discovery:** Ask the bundled build which encoders and decoders it actually has
 - 🎯 **TypeScript:** Complete public callback and result types
 - 🗂️ **16 KB Android support:** Uses a maintained FFmpegKit-compatible Android artifact with 16 KB page-size support
 
@@ -125,9 +127,61 @@
 | Cancel one FFmpeg session    | ✅              | ✅              | Pass the positive safe-integer ID received by `execute`'s `onSessionCreated`. The native dependency does not expose FFprobe cancellation.               |
 | Cancel all FFmpeg sessions   | ✅              | ✅              | Use `cancelAll()` or call `cancel()` without an ID.                                                                                                     |
 | Expo Go                      | ❌              | ❌              | A native development build is required.                                                                                                                 |
-| Remote HTTP(S) inputs        | Build-dependent | Build-dependent | The bundled variants include HTTPS support, but remote server behavior and protocol support can vary. Prefer local files for predictable app workflows. |
+| Capability discovery         | ✅              | ✅              | `listEncoders()`, `listDecoders()`, and `pickEncoder()` report what the bundled build supports.                                                          |
+| H.264 encoding               | VideoToolbox    | libx264         | The builds differ; use `pickEncoder(['libx264', 'h264_videotoolbox'])` instead of hard-coding an encoder.                                                |
+| Remote HTTP(S) inputs        | ✅              | ✅              | Both builds link GnuTLS. Remote server behaviour still varies; prefer local files for predictable app workflows.                                         |
 
-Codec availability is determined by the native FFmpeg builds listed below. Do not assume every FFmpeg codec or external library is bundled.
+Codec availability is determined by the native FFmpeg builds described in [Bundled FFmpeg builds](#bundled-ffmpeg-builds). Do not assume every FFmpeg codec or external library is present.
+
+## Bundled FFmpeg builds
+
+FFmpegKit was retired upstream in 2025 and its official binaries were withdrawn, so this package depends on maintained community rebuilds. The two platforms are **not** the same build:
+
+| | iOS | Android |
+| --- | --- | --- |
+| Artifact | `ffmpeg-kit-ios-full-gpl-alt` 6.0 | `io.github.jamaismagic.ffmpeg:ffmpeg-kit-main-16kb` 6.1.7 |
+| FFmpeg | n6.0 | n6.1.4 |
+| Effective license | LGPLv3 | **GPLv3** |
+| Hardware codecs | VideoToolbox, AudioToolbox | MediaCodec |
+| 16 KB page size | n/a | ✅ (required by Google Play) |
+
+Despite its name, the iOS pod ships FFmpeg's non-GPL configuration: it has no `libx264`, `libx265`, or `libxvid`. No public GPL build of FFmpegKit for iOS exists since the upstream retirement.
+
+### Encoders
+
+Verified by running the example's device suite on both platforms: iOS reports 201 encoders, Android 196, with 181 in common. Everything FFmpeg builds natively (`aac`, `alac`, `flac`, `mpeg4`, `mjpeg`, `png`, `gif`, `pcm_*`, …) is available on both, as are `libmp3lame`, `libopus`, `libvpx` (VP8), and `libvpx-vp9`.
+
+The differences that matter:
+
+| Encoder | iOS | Android |
+| --- | --- | --- |
+| `libx264` / `libx264rgb` (H.264, software) | ❌ | ✅ |
+| `libx265` (HEVC, software) | ❌ | ✅ |
+| `h264_videotoolbox`, `hevc_videotoolbox`, `prores_videotoolbox` | ✅ | ❌ |
+| `h264_mediacodec`, `hevc_mediacodec`, `vp8_mediacodec`, `vp9_mediacodec`, `av1_mediacodec` | ❌ | ✅ |
+| `libkvazaar` (HEVC, software) | ✅ | ❌ |
+| `libtheora`, `libvorbis`, `libwebp` | ✅ | ❌ |
+| `libspeex`, `libshine`, `libtwolame`, `libilbc`, `libopencore_amrnb`, `libvo_amrwbenc` | ✅ | ❌ |
+| `aac_at`, `alac_at`, `ilbc_at` (AudioToolbox) | ✅ | ❌ |
+
+iOS additionally links libass, so subtitle burn-in filters work there but not on Android.
+
+Both platforms can encode H.264 and HEVC — just not with the same encoder name. Resolve it at runtime instead of branching on `Platform.OS`:
+
+```typescript
+import { execute, pickEncoder } from 'munim-ffmpeg'
+
+const h264 = await pickEncoder(['libx264', 'h264_videotoolbox'])
+if (!h264) throw new Error('No H.264 encoder in this build')
+
+await execute(['-y', '-i', inputPath, '-c:v', h264, outputPath])
+```
+
+Decoding is far more uniform: both builds decode H.264, HEVC, VP8/VP9, AV1 (`libdav1d`), MPEG-4, MP3, AAC, Vorbis, Opus, FLAC, and the usual container formats. Both link GnuTLS, so `https://` inputs work.
+
+The Android build is compiled with `--disable-indev=lavfi`, so `-f lavfi -i testsrc=...` and other virtual inputs are iOS-only. Feed real files or raw frames instead.
+
+> **Avoid the `-full` and `-full-gpl` Android artifacts.** Their `libavdevice.so` references hidapi symbols that nothing in the package provides, so FFmpegKit fails to initialise at runtime with `UnsatisfiedLinkError: cannot locate symbol "PLATFORM_hid_write"`.
 
 ## 📦 Installation
 
@@ -221,14 +275,14 @@ import {
   getFFmpegVersion,
   getMediaInformation,
   probe,
-} from "munim-ffmpeg";
+} from 'munim-ffmpeg'
 
-console.log("FFmpeg:", getFFmpegVersion());
+console.log('FFmpeg:', getFFmpegVersion())
 
-let activeSessionId: number | undefined;
+let activeSessionId: number | undefined
 
 const execution = execute(
-  ["-y", "-i", inputPath, "-c:v", "mpeg4", "-c:a", "aac", outputPath],
+  ['-y', '-i', inputPath, '-c:v', 'mpeg4', '-c:a', 'aac', outputPath],
   (message) => console.log(message),
   (timeMs, sizeBytes, bitrateKbits, speed, frame, fps, quality) => {
     console.log({
@@ -239,33 +293,33 @@ const execution = execute(
       frame,
       fps,
       quality,
-    });
+    })
   },
   (sessionId) => {
-    activeSessionId = sessionId;
-  },
-);
+    activeSessionId = sessionId
+  }
+)
 
 // Call this from a cancel button while the command is running.
 if (activeSessionId !== undefined) {
-  cancel(activeSessionId);
+  cancel(activeSessionId)
 }
 
-const result = await execution;
+const result = await execution
 
 if (!result.success && !result.cancelled) {
-  throw new Error(result.failStackTrace ?? result.output);
+  throw new Error(result.failStackTrace ?? result.output)
 }
 
 const probeResult = await probe([
-  "-v",
-  "error",
-  "-show_format",
-  "-show_streams",
+  '-v',
+  'error',
+  '-show_format',
+  '-show_streams',
   inputPath,
-]);
+])
 
-const mediaInformation = await getMediaInformation(inputPath);
+const mediaInformation = await getMediaInformation(inputPath)
 ```
 
 ## 🔧 API reference
@@ -285,10 +339,10 @@ function execute(
     speed: number,
     videoFrameNumber: number,
     fps: number,
-    quality: number,
+    quality: number
   ) => void,
-  onSessionCreated?: (sessionId: number) => void,
-): Promise<FFmpegSessionResult>;
+  onSessionCreated?: (sessionId: number) => void
+): Promise<FFmpegSessionResult>
 ```
 
 The `onSessionCreated` callback receives the ID before the command completes, allowing targeted cancellation while work is running.
@@ -301,8 +355,8 @@ Starts an asynchronous FFprobe session.
 function probe(
   arguments_: string[],
   onLog?: (message: string) => void,
-  onSessionCreated?: (sessionId: number) => void,
-): Promise<FFmpegSessionResult>;
+  onSessionCreated?: (sessionId: number) => void
+): Promise<FFmpegSessionResult>
 ```
 
 `onSessionCreated` can be used to correlate the native probe session with its eventual result. The bundled native dependency does not expose FFprobe cancellation.
@@ -312,7 +366,7 @@ function probe(
 Runs FFprobe for the format, streams, and chapters at a local media path, then parses its JSON response.
 
 ```typescript
-function getMediaInformation(path: string): Promise<unknown>;
+function getMediaInformation(path: string): Promise<unknown>
 ```
 
 Applications should validate or narrow the returned JSON shape before using fields from it.
@@ -322,7 +376,7 @@ Applications should validate or narrow the returned JSON shape before using fiel
 Cancels the given native FFmpeg execution session. Calling `cancel()` without an ID cancels all active FFmpeg sessions. FFprobe cancellation is not exposed by the bundled native dependency.
 
 ```typescript
-function cancel(sessionId?: number): void;
+function cancel(sessionId?: number): void
 ```
 
 Session IDs must be positive safe integers received from `onSessionCreated` or `FFmpegSessionResult`.
@@ -332,7 +386,7 @@ Session IDs must be positive safe integers received from `onSessionCreated` or `
 Cancels every active FFmpeg session.
 
 ```typescript
-function cancelAll(): void;
+function cancelAll(): void
 ```
 
 ### `getFFmpegVersion()`
@@ -340,23 +394,53 @@ function cancelAll(): void;
 Returns the version reported by the bundled native FFmpeg library.
 
 ```typescript
-function getFFmpegVersion(): string;
+function getFFmpegVersion(): string
+```
+
+### `listEncoders()`
+
+Returns the encoder names the bundled FFmpeg build can write. The result is cached after the first call.
+
+```typescript
+function listEncoders(): Promise<string[]>
+```
+
+### `listDecoders()`
+
+Returns the decoder names the bundled FFmpeg build can read.
+
+```typescript
+function listDecoders(): Promise<string[]>
+```
+
+### `pickEncoder(candidates)`
+
+Returns the first name in `candidates` that the build provides, or `undefined` when none are available. Use it to write one command that runs on both platforms.
+
+```typescript
+function pickEncoder(candidates: string[]): Promise<string | undefined>
+```
+
+```typescript
+const hevc = await pickEncoder(['libx265', 'hevc_videotoolbox'])
 ```
 
 ### `FFmpegSessionResult`
 
 ```typescript
 type FFmpegSessionResult = {
-  sessionId: number;
-  returnCode: number;
-  success: boolean;
-  cancelled: boolean;
-  state: string;
-  durationMs: number;
-  output: string;
-  failStackTrace?: string;
-};
+  sessionId: number
+  returnCode: number
+  success: boolean
+  cancelled: boolean
+  state: string
+  durationMs: number
+  output: string
+  failStackTrace?: string
+}
 ```
+
+`state` is one of `created`, `running`, `failed`, or `completed`, and reports the same values on both platforms.
 
 Always check `success` or `cancelled`; Promise resolution means the native session completed, not necessarily that FFmpeg returned a success code.
 
@@ -365,114 +449,144 @@ Always check `success` or `cancelled`; Promise resolution means the native sessi
 ### Inspect media metadata
 
 ```typescript
-import { getMediaInformation } from "munim-ffmpeg";
+import { getMediaInformation } from 'munim-ffmpeg'
 
-const information = await getMediaInformation(inputPath);
-console.log(JSON.stringify(information, null, 2));
+const information = await getMediaInformation(inputPath)
+console.log(JSON.stringify(information, null, 2))
 ```
 
 ### Extract an audio track
 
 ```typescript
-import { execute } from "munim-ffmpeg";
+import { execute } from 'munim-ffmpeg'
 
 const result = await execute([
-  "-y",
-  "-i",
+  '-y',
+  '-i',
   inputPath,
-  "-vn",
-  "-c:a",
-  "aac",
+  '-vn',
+  '-c:a',
+  'aac',
   outputAudioPath,
-]);
+])
 
 if (!result.success) {
-  throw new Error(result.failStackTrace ?? result.output);
+  throw new Error(result.failStackTrace ?? result.output)
 }
+```
+
+### Transcode to H.264 on both platforms
+
+```typescript
+import { execute, pickEncoder } from 'munim-ffmpeg'
+
+const encoder = await pickEncoder(['libx264', 'h264_videotoolbox'])
+if (!encoder) throw new Error('No H.264 encoder available in this build')
+
+// -preset is an x264 option; VideoToolbox rejects it.
+const quality = encoder === 'libx264' ? ['-preset', 'veryfast', '-crf', '23'] : ['-b:v', '2M']
+
+const result = await execute([
+  '-y',
+  '-i',
+  inputPath,
+  '-c:v',
+  encoder,
+  ...quality,
+  '-c:a',
+  'aac',
+  '-pix_fmt',
+  'yuv420p',
+  outputPath,
+])
+
+if (!result.success) throw new Error(result.failStackTrace ?? result.output)
 ```
 
 ### Generate a thumbnail
 
 ```typescript
-import { execute } from "munim-ffmpeg";
+import { execute } from 'munim-ffmpeg'
 
 const result = await execute([
-  "-y",
-  "-ss",
-  "00:00:01.000",
-  "-i",
+  '-y',
+  '-ss',
+  '00:00:01.000',
+  '-i',
   inputPath,
-  "-frames:v",
-  "1",
+  '-frames:v',
+  '1',
   outputImagePath,
-]);
+])
 ```
 
 ### Cancel a long-running command
 
 ```typescript
-import { cancel, execute } from "munim-ffmpeg";
+import { cancel, execute } from 'munim-ffmpeg'
 
-let sessionId: number | undefined;
+let sessionId: number | undefined
 
 const execution = execute(
-  ["-i", inputPath, "-c:v", "mpeg4", outputPath],
+  ['-i', inputPath, '-c:v', 'mpeg4', outputPath],
   undefined,
   undefined,
   (createdSessionId) => {
-    sessionId = createdSessionId;
-  },
-);
+    sessionId = createdSessionId
+  }
+)
 
 const cancelCurrentCommand = () => {
   if (sessionId !== undefined) {
-    cancel(sessionId);
+    cancel(sessionId)
   }
-};
+}
 
-const result = await execution;
-console.log(result.cancelled);
+const result = await execution
+console.log(result.cancelled)
 ```
 
 ### Run a custom FFprobe query
 
 ```typescript
-import { probe } from "munim-ffmpeg";
+import { probe } from 'munim-ffmpeg'
 
 const result = await probe([
-  "-v",
-  "error",
-  "-select_streams",
-  "v:0",
-  "-show_entries",
-  "stream=codec_name,width,height,duration",
-  "-of",
-  "json",
+  '-v',
+  'error',
+  '-select_streams',
+  'v:0',
+  '-show_entries',
+  'stream=codec_name,width,height,duration',
+  '-of',
+  'json',
   inputPath,
-]);
+])
 
 if (result.success) {
-  console.log(result.output);
+  console.log(result.output)
 }
 ```
 
-## Native dependencies and licensing
+## Licensing
 
-The JavaScript, TypeScript, Swift, Kotlin, and generated Nitro bridge code in this repository are Apache-2.0 licensed. Native FFmpeg binaries are supplied by separate compatibility packages:
+The JavaScript, TypeScript, Swift, Kotlin, and generated Nitro bridge code in this repository are Apache-2.0. The native FFmpeg binaries are not, and the two platforms differ:
 
-| Platform | Native dependency                                   | Version |
-| -------- | --------------------------------------------------- | ------- |
-| iOS      | `ffmpeg-kit-ios-https-alt`                          | 6.0     |
-| Android  | `io.github.jamaismagic.ffmpeg:ffmpeg-kit-main-16kb` | 6.1.4   |
+| Platform | Native dependency | Version | Effective license |
+| -------- | ----------------- | ------- | ----------------- |
+| iOS      | `ffmpeg-kit-ios-full-gpl-alt` | 6.0 | LGPLv3 (`--enable-version3`, no GPL libraries linked) |
+| Android  | `io.github.jamaismagic.ffmpeg:ffmpeg-kit-main-16kb` | 6.1.7 | **GPLv3** (`--enable-gpl` with x264 and x265) |
 
-The bundled Android 6.1.4 artifact is GPL-enabled and includes x264 and x265. Distributing an Android application with this dependency can trigger GPLv3 source, license, and redistribution obligations. Its published Maven metadata does not fully communicate that posture, so assess the binaries and their notices rather than relying only on the POM license field.
+The Android artifact's published Maven metadata claims LGPL-3.0. That metadata is wrong: the shipped `libavcodec.so` is configured with `--enable-gpl` and the AAR bundles the x264 and x265 license notices. Treat the Android build as GPLv3.
 
-FFmpeg's effective license depends on the enabled libraries, codecs, and build configuration. Before distributing an application:
+Distributing an Android application built against it can trigger GPLv3 source, license, and redistribution obligations for your application. If that does not suit your product, replace the Android dependency in `android/build.gradle` with a non-GPL FFmpegKit artifact; H.264 encoding then relies on `h264_mediacodec`.
+
+Before distributing an application:
 
 1. Review the license and notices shipped by each native dependency.
-2. Identify the codecs and linked libraries used by your product.
+2. Identify the codecs and linked libraries your product actually uses.
 3. Follow the applicable LGPL, GPL, attribution, relinking, and source-offer requirements.
-4. Treat the current Android build as GPL-enabled, and reassess licensing again if you replace either native dependency.
+4. Reassess licensing whenever you replace a native dependency.
 
 See [FFmpeg legal guidance](https://ffmpeg.org/legal.html). This section is an engineering reminder, not legal advice.
 
@@ -496,7 +610,7 @@ Rebuild the native app after installing both `munim-ffmpeg` and `react-native-ni
 
 ### A codec or filter is missing
 
-Native FFmpeg variants do not bundle every codec, filter, or third-party library. Check `getFFmpegVersion()` and the session output, then choose a bundled codec or replace the native dependency with a build whose licensing and features fit your application.
+Native FFmpeg variants do not bundle every codec, filter, or third-party library, and the iOS and Android builds are not identical. Call `listEncoders()` or `listDecoders()` to see what the running build actually has, and prefer `pickEncoder()` over a hard-coded name. `libx264` in particular exists only on Android — see [Bundled FFmpeg builds](#bundled-ffmpeg-builds).
 
 ### The Promise resolved but the command failed
 
@@ -504,24 +618,46 @@ Inspect `result.success`, `result.cancelled`, `result.returnCode`, `result.outpu
 
 ### iOS pod or build errors
 
-Run `pod install` after installation and rebuild from a clean native development build. The package includes a narrowly scoped Xcode 26 compatibility patch for the FFmpegKit `Level` enum used by Nitro's Swift/C++ bridge.
+Run `pod install` after installation and rebuild from a clean native development build. The package includes a narrowly scoped Xcode 26 compatibility patch for the FFmpegKit `Level` enum, which Nitro's Swift/C++ bridge otherwise rejects. The patch locates the header by globbing, so it keeps working if you swap the FFmpegKit pod.
+
+### `building for iOS Simulator, but linking ... built for iOS`
+
+The FFmpegKit pod tells consuming apps to exclude `arm64` from Simulator builds, which breaks Apple Silicon Macs even though its xcframework contains an `arm64` Simulator slice. The Expo config plugin removes that exclusion automatically. In a bare React Native app, add the same fix to your `Podfile`:
+
+```ruby
+post_install do |installer|
+  installer.pods_project.build_configurations.each do |config|
+    config.build_settings.delete('EXCLUDED_ARCHS[sdk=iphonesimulator*]')
+  end
+  installer.aggregate_targets.each do |aggregate_target|
+    aggregate_target.xcconfigs.each do |config_name, xcconfig|
+      xcconfig.attributes.delete('EXCLUDED_ARCHS[sdk=iphonesimulator*]')
+      xcconfig.save_as(Pathname.new(aggregate_target.xcconfig_path(config_name)))
+    end
+  end
+end
+```
 
 ### Android build errors
 
 Use Android API 24 or newer, JDK 17, and the React Native New Architecture. Clear stale Gradle build output after changing native dependency versions.
 
+If the build fails on duplicate `libc++_shared.so`, make sure the config plugin ran (Expo) or add `android.packagingOptions.pickFirsts=**/libc++_shared.so` to `gradle.properties` (bare React Native). FFmpegKit and React Native both ship that library.
+
 ## Development
 
 ```bash
 npm install
-npm run codegen
-npm run typecheck
-npm run typecheck:example
-npm run build
-npm run pack:dry-run
+npm run check   # codegen, typecheck, example typecheck, build, pack dry-run
 ```
 
-Run the Expo example with:
+Individual steps are available as `npm run codegen`, `typecheck`, `typecheck:example`, and `build`.
+
+Nitrogen output under `nitrogen/generated` is committed. Change the `.nitro.ts` specification and rerun `npm run codegen` instead of editing generated files directly.
+
+### Example app
+
+`example/` is an Expo app that runs a device test suite covering the encoders, the filter graph, both callback streams, FFprobe, cancellation, and failure reporting. Results are rendered on screen, written to `munim-ffmpeg-suite.json` in the app's document directory, and logged as `MUNIM_FFMPEG_SUITE_RESULT`.
 
 ```bash
 npm run example:ios
@@ -529,15 +665,18 @@ npm run example:ios
 npm run example:android
 ```
 
-Releases are validated and published manually; this repository does not use GitHub Actions:
+FFmpeg encoding is slow in a simulator or emulator; run the suite on a physical device.
+
+### Releasing
+
+Releases run locally from a clean `main`; this repository does not use GitHub Actions.
 
 ```bash
 npm run check
-cd packages/munim-ffmpeg
-npm publish --access public
+npm run release:local
 ```
 
-Nitrogen output under `packages/munim-ffmpeg/nitrogen/generated` is committed. Change the `.nitro.ts` specification and rerun codegen instead of editing generated files directly.
+`release:local` runs semantic-release with the npm token from the macOS Keychain and the GitHub CLI token, so commit messages must follow Conventional Commits.
 
 ## 👏 Contributing
 

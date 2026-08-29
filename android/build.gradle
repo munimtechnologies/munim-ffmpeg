@@ -140,5 +140,8 @@ dependencies {
   implementation project(":react-native-nitro-modules")
 
   // Maintained FFmpegKit-compatible Android artifact with 16 KB page support.
-  implementation "io.github.jamaismagic.ffmpeg:ffmpeg-kit-main-16kb:6.1.4"
+  // Do not move to the `-full`/`-full-gpl` variants: their libavdevice.so
+  // references hidapi symbols that nothing provides, so FFmpegKit fails to load
+  // at runtime with UnsatisfiedLinkError.
+  implementation "io.github.jamaismagic.ffmpeg:ffmpeg-kit-main-16kb:6.1.7"
 }

@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Metro config for the example so the workspace symlink back to the repository root no longer breaks bundling.
+- `listEncoders()`, `listDecoders()`, and `pickEncoder()` so a command can resolve an available encoder at runtime instead of hard-coding a per-platform name.
+- Expo config plugin now removes the FFmpegKit pod's `EXCLUDED_ARCHS[sdk=iphonesimulator*]` setting, so iOS Simulator builds work on Apple Silicon.
+- `npm run release:local` (semantic-release, matching the other Munim packages) and `npm run check` for full local validation.
+- Example app runs a device suite covering H.264, MP3, AAC, filters, FFprobe, cancellation, and failure reporting, and writes the result to `munim-ffmpeg-suite.json`. Verified green on an iPad Air (M3) and a Galaxy A14 5G.
+
+### Fixed
+
+- iOS reported `FFmpegSessionResult.state` as `sessionstate(rawvalue: 3)`; it now returns `created`/`running`/`failed`/`completed` like Android.
+
+### Changed
+
+- Repository flattened from a workspace monorepo to the standard package layout used by the other Munim packages; the package now lives at the repository root.
+- iOS depends on `ffmpeg-kit-ios-full-gpl-alt` 6.0 instead of `ffmpeg-kit-ios-https-alt`, adding VP8/VP9, Opus, Vorbis, Theora, WebP, MP3, kvazaar, AV1 decoding, and subtitle rendering.
+- Android FFmpegKit moved from 6.1.4 to 6.1.7, which adds `libopus`. The `-full`/`-full-gpl` artifacts were evaluated and rejected: their `libavdevice.so` references hidapi symbols that nothing provides, so FFmpegKit fails to initialise on device.
+- The Xcode 26 `Level.h` patch locates the header by globbing, so it survives a change of FFmpegKit pod.
+
+### Documentation
+
+- Documented the actual per-platform FFmpeg builds, including the encoders each one provides and the fact that `libx264` exists only on Android.
+- Corrected the licensing section: Android is GPLv3, iOS is LGPLv3, and the iOS pod's `full-gpl` name does not reflect a GPL build.
+- Added troubleshooting entries for the Apple Silicon Simulator exclusion and duplicate `libc++_shared.so`.
+
 ## [0.1.1] - 2026-08-06
 
 ### Fixed
