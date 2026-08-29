@@ -47,10 +47,11 @@ function workspace() {
   return directory
 }
 
-// libx264 ships in the Android GPL build; iOS falls back to the VideoToolbox
-// hardware encoder, which does not understand x264's -preset.
-const H264_ENCODERS = ['libx264', 'h264_videotoolbox']
-const HEVC_ENCODERS = ['libx265', 'hevc_videotoolbox']
+// Which H.264/HEVC encoder exists depends entirely on how the bundled FFmpeg
+// was built: libx264 in a GPL build, VideoToolbox on iOS, MediaCodec on
+// Android. Asking at runtime is the only portable approach.
+const H264_ENCODERS = ['libx264', 'h264_videotoolbox', 'h264_mediacodec']
+const HEVC_ENCODERS = ['libx265', 'hevc_videotoolbox', 'hevc_mediacodec']
 
 // The Android build is compiled with `--disable-indev=lavfi`, so the usual
 // `testsrc` generator is unavailable. Raw RGB frames written from JavaScript
@@ -76,10 +77,15 @@ function rawVideoInput(uri: string) {
   ]
 }
 
+// Each encoder family wants a different input format: MediaCodec takes NV12,
+// the software and VideoToolbox encoders take planar YUV.
 function videoEncoderArguments(encoder: string) {
-  return encoder === 'libx264'
-    ? ['-c:v', encoder, '-preset', 'ultrafast', '-g', String(RAW_FPS)]
-    : ['-c:v', encoder, '-g', String(RAW_FPS)]
+  const common = ['-c:v', encoder, '-g', String(RAW_FPS)]
+  if (encoder.endsWith('_mediacodec')) return [...common, '-pix_fmt', 'nv12']
+  if (encoder === 'libx264') {
+    return [...common, '-preset', 'ultrafast', '-pix_fmt', 'yuv420p']
+  }
+  return [...common, '-pix_fmt', 'yuv420p']
 }
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -177,8 +183,6 @@ export async function runSuite(
             '-hide_banner',
             ...rawVideoInput(raw.uri),
             ...videoEncoderArguments(h264),
-            '-pix_fmt',
-            'yuv420p',
             video.uri,
           ],
           (message) => logs.push(message),
@@ -231,7 +235,7 @@ export async function runSuite(
         '-i',
         video.uri,
         '-vf',
-        'scale=80:60',
+        'scale=176:144',
         ...videoEncoderArguments(h264),
         scaled.uri,
       ])
@@ -243,9 +247,11 @@ export async function runSuite(
       const stream = information.streams?.find(
         (candidate) => candidate.codec_type === 'video'
       )
+      // MediaCodec rejects very small frames, so the target is a size every
+      // encoder accepts: both dimensions are multiples of 16.
       assert(
-        stream?.width === 80 && stream?.height === 60,
-        `expected 80x60, got ${stream?.width}x${stream?.height}`
+        stream?.width === 176 && stream?.height === 144,
+        `expected 176x144, got ${stream?.width}x${stream?.height}`
       )
       return `scaled to ${stream?.width}x${stream?.height}`
     })
@@ -591,7 +597,7 @@ export async function runSuite(
         '-i',
         video.uri,
         '-filter_complex',
-        'fps=8,scale=80:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse',
+        'fps=8,scale=128:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse',
         gif.uri,
       ])
       assert(result.success, result.failStackTrace ?? result.output)
