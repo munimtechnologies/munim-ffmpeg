@@ -102,6 +102,9 @@ Two environments cannot validate everything:
   refuses non-native system images. Validate that ABI on an Intel or Linux
   machine, or statically: correct ELF architecture, four `Java_..._FFmpegNative`
   exports, only system libraries unresolved, and the same codec set as arm64.
+- **Release APKs are not debuggable**, so `run-as` cannot read the suite's JSON
+  result. On a `google_apis` emulator image, `adb root` then read
+  `/data/data/<pkg>/files/` instead.
 
 ## Upgrading FFmpeg
 

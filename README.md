@@ -145,9 +145,10 @@ Every release runs the example's 25-check device suite. For 0.4.x:
 | iOS Simulator, arm64 | 25/25 |
 | Galaxy A14 5G, arm64-v8a | 25/25 |
 | Android emulator, arm64 | Software encoding passes; hardware encoding does not — see below |
-| Android `armeabi-v7a`, `x86_64` | Built and statically checked, not executed |
+| Android emulator, `x86_64` | Same: `libopenh264` passes, MediaCodec does not |
+| Android `armeabi-v7a` | Built and statically checked, not executed |
 
-`x86_64` cannot be run on an Apple Silicon machine: the Android emulator refuses non-native system images, and no x86_64 hardware was available. Both remaining ABIs were verified to be correct ELF binaries with the right architecture, the expected JNI exports, only system libraries unresolved, and the same FFmpeg 9.0.1 and codec set as arm64.
+`x86_64` was verified on an Intel Windows machine, since the Android emulator refuses non-native system images on Apple Silicon: FFmpeg 9.0.1, 185 encoders, and the software H.264 encode passes. `armeabi-v7a` has no hardware to hand, so it was checked statically instead — correct ELF architecture, the expected JNI exports, only system libraries unresolved, and the same FFmpeg and codec set as arm64.
 
 ### Android emulators cannot encode video
 
