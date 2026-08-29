@@ -9,13 +9,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Metro config for the example so the workspace symlink back to the repository root no longer breaks bundling.
+- `normalizePath()`, applied automatically to every path passed to `execute()`, `probe()`, and `getMediaInformation()`.
 - `listEncoders()`, `listDecoders()`, and `pickEncoder()` so a command can resolve an available encoder at runtime instead of hard-coding a per-platform name.
 - Expo config plugin now removes the FFmpegKit pod's `EXCLUDED_ARCHS[sdk=iphonesimulator*]` setting, so iOS Simulator builds work on Apple Silicon.
 - `npm run release:local` (semantic-release, matching the other Munim packages) and `npm run check` for full local validation.
-- Example app runs a device suite covering H.264, MP3, AAC, filters, FFprobe, cancellation, and failure reporting, and writes the result to `munim-ffmpeg-suite.json`. Verified green on an iPad Air (M3) and a Galaxy A14 5G.
+- Example app runs a 24-check device suite (encoding, muxing, trimming, concatenation, filter graphs, thumbnails, resampling, awkward paths, concurrency, cancellation, protocols, failure paths) and writes the result to `munim-ffmpeg-suite.json`. 24/24 on an iPad Air (M3) and a Galaxy A14 5G.
 
 ### Fixed
 
+- Paths from `expo-file-system` and similar libraries are percent-encoded `file://` URIs, which FFmpeg's file protocol takes literally: any path with a space or non-ASCII character silently wrote to a mangled filename. Those URIs are now decoded before they reach FFmpeg.
 - iOS reported `FFmpegSessionResult.state` as `sessionstate(rawvalue: 3)`; it now returns `created`/`running`/`failed`/`completed` like Android.
 
 ### Changed

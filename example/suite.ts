@@ -1,16 +1,18 @@
 import { Directory, File, Paths } from 'expo-file-system'
 import {
   cancel,
+  cancelAll,
   execute,
   getFFmpegVersion,
   getMediaInformation,
   listDecoders,
   listEncoders,
+  normalizePath,
   pickEncoder,
   probe,
 } from 'munim-ffmpeg'
 
-import { SMOKE_WAV_BASE64, decodeBase64 } from './fixture'
+import { RAW_VIDEO, rawVideoFrames, wavFixture } from './fixture'
 
 export type CheckResult = {
   name: string
@@ -48,32 +50,16 @@ function workspace() {
 // libx264 ships in the Android GPL build; iOS falls back to the VideoToolbox
 // hardware encoder, which does not understand x264's -preset.
 const H264_ENCODERS = ['libx264', 'h264_videotoolbox']
+const HEVC_ENCODERS = ['libx265', 'hevc_videotoolbox']
 
 // The Android build is compiled with `--disable-indev=lavfi`, so the usual
 // `testsrc` generator is unavailable. Raw RGB frames written from JavaScript
 // give both platforms the same input without bundling a media asset.
-const RAW_WIDTH = 160
-const RAW_HEIGHT = 120
-const RAW_FRAMES = 10
-const RAW_FPS = 15
-
-function rawVideoFrames() {
-  const frameSize = RAW_WIDTH * RAW_HEIGHT * 3
-  const bytes = new Uint8Array(frameSize * RAW_FRAMES)
-
-  for (let frame = 0; frame < RAW_FRAMES; frame += 1) {
-    for (let y = 0; y < RAW_HEIGHT; y += 1) {
-      for (let x = 0; x < RAW_WIDTH; x += 1) {
-        const offset = frame * frameSize + (y * RAW_WIDTH + x) * 3
-        bytes[offset] = (x * 2 + frame * 12) & 0xff
-        bytes[offset + 1] = (y * 2) & 0xff
-        bytes[offset + 2] = (x + y) & 0xff
-      }
-    }
-  }
-
-  return bytes
-}
+const RAW_WIDTH = RAW_VIDEO.width
+const RAW_HEIGHT = RAW_VIDEO.height
+const RAW_FRAMES = RAW_VIDEO.frames
+const RAW_FPS = RAW_VIDEO.fps
+const SOURCE_SECONDS = RAW_FRAMES / RAW_FPS
 
 function rawVideoInput(uri: string) {
   return [
@@ -92,8 +78,8 @@ function rawVideoInput(uri: string) {
 
 function videoEncoderArguments(encoder: string) {
   return encoder === 'libx264'
-    ? ['-c:v', encoder, '-preset', 'ultrafast']
-    : ['-c:v', encoder]
+    ? ['-c:v', encoder, '-preset', 'ultrafast', '-g', String(RAW_FPS)]
+    : ['-c:v', encoder, '-g', String(RAW_FPS)]
 }
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -105,6 +91,9 @@ async function run(
   body: () => Promise<string>
 ): Promise<CheckResult> {
   const startedAt = Date.now()
+  // Logged before the work starts so a hung check is identifiable from logcat
+  // or the Xcode console.
+  console.log('MUNIM_FFMPEG_CHECK', name)
   try {
     const detail = await body()
     return { name, passed: true, detail, durationMs: Date.now() - startedAt }
@@ -137,7 +126,7 @@ export async function runSuite(
 
   const source = new File(directory, 'source.wav')
   source.create({ overwrite: true })
-  source.write(decodeBase64(SMOKE_WAV_BASE64))
+  source.write(wavFixture(SOURCE_SECONDS))
 
   const raw = new File(directory, 'source.rgb')
   raw.create({ overwrite: true })
@@ -147,6 +136,7 @@ export async function runSuite(
   const scaled = new File(directory, 'scaled.mp4')
   const mp3 = new File(directory, 'audio.mp3')
   const aac = new File(directory, 'audio.m4a')
+  const muxed = new File(directory, 'muxed.mp4')
 
   record(
     await run('Reports an FFmpeg version', async () => {
@@ -398,6 +388,402 @@ export async function runSuite(
         `expected state "completed", got "${result.state}"`
       )
       return `returnCode ${result.returnCode}, state ${result.state}`
+    })
+  )
+
+  record(
+    await run('Muxes video and audio into one file', async () => {
+      const result = await execute([
+        '-y',
+        '-hide_banner',
+        '-i',
+        video.uri,
+        '-i',
+        source.uri,
+        '-c:v',
+        'copy',
+        '-c:a',
+        'aac',
+        '-shortest',
+        muxed.uri,
+      ])
+      assert(result.success, result.failStackTrace ?? result.output)
+
+      const information = (await getMediaInformation(
+        muxed.uri
+      )) as MediaInformation
+      const kinds = (information.streams ?? []).map(
+        (stream) => stream.codec_type
+      )
+      assert(kinds.includes('video'), 'no video stream in the muxed file')
+      assert(kinds.includes('audio'), 'no audio stream in the muxed file')
+
+      const duration = Number(information.format?.duration ?? 'NaN')
+      const expected = SOURCE_SECONDS
+      assert(
+        Math.abs(duration - expected) < 0.3,
+        `expected about ${expected}s, got ${information.format?.duration}`
+      )
+      return `${kinds.join(' + ')}, ${duration.toFixed(2)}s`
+    })
+  )
+
+  record(
+    await run('Extracts the audio track back out', async () => {
+      const extracted = new File(directory, 'extracted.m4a')
+      const result = await execute([
+        '-y',
+        '-hide_banner',
+        '-i',
+        muxed.uri,
+        '-vn',
+        '-c:a',
+        'copy',
+        extracted.uri,
+      ])
+      assert(result.success, result.failStackTrace ?? result.output)
+
+      const information = (await getMediaInformation(
+        extracted.uri
+      )) as MediaInformation
+      assert(
+        information.streams?.length === 1 &&
+          information.streams[0]?.codec_type === 'audio',
+        'expected a single audio stream'
+      )
+      return `${extracted.size} bytes, ${information.streams?.[0]?.codec_name}`
+    })
+  )
+
+  record(
+    await run('Trims with stream copy', async () => {
+      const trimmed = new File(directory, 'trimmed.mp4')
+      // `-ss` before `-i` is input seeking: it snaps to a keyframe, which is
+      // what stream copy needs. After `-i` it drops packets mid-GOP and can
+      // leave a file with no decodable duration.
+      const result = await execute([
+        '-y',
+        '-hide_banner',
+        '-ss',
+        '1',
+        '-i',
+        muxed.uri,
+        '-t',
+        '1',
+        '-c',
+        'copy',
+        trimmed.uri,
+      ])
+      assert(result.success, result.failStackTrace ?? result.output)
+
+      const information = (await getMediaInformation(
+        trimmed.uri
+      )) as MediaInformation
+      const duration = Number(information.format?.duration ?? 'NaN')
+      assert(
+        Number.isFinite(duration) && duration > 0.5 && duration < 1.6,
+        `unexpected trimmed duration ${JSON.stringify(information.format)}`
+      )
+      return `${duration.toFixed(3)}s from a ${SOURCE_SECONDS}s source`
+    })
+  )
+
+  record(
+    await run('Extracts a thumbnail at a timestamp', async () => {
+      const thumbnail = new File(directory, 'thumbnail.png')
+      const result = await execute([
+        '-y',
+        '-hide_banner',
+        '-ss',
+        '0.3',
+        '-i',
+        video.uri,
+        '-frames:v',
+        '1',
+        thumbnail.uri,
+      ])
+      assert(result.success, result.failStackTrace ?? result.output)
+      assert((thumbnail.size ?? 0) > 0, 'no thumbnail written')
+
+      const information = (await getMediaInformation(
+        thumbnail.uri
+      )) as MediaInformation
+      assert(
+        information.streams?.[0]?.codec_name === 'png',
+        `expected png, got ${information.streams?.[0]?.codec_name}`
+      )
+      return `${thumbnail.size} bytes png`
+    })
+  )
+
+  record(
+    await run('Encodes VP9 and Opus into WebM', async () => {
+      const webm = new File(directory, 'clip.webm')
+      const result = await execute([
+        '-y',
+        '-hide_banner',
+        '-i',
+        muxed.uri,
+        '-c:v',
+        'libvpx-vp9',
+        '-b:v',
+        '200k',
+        '-deadline',
+        'realtime',
+        '-cpu-used',
+        '8',
+        '-c:a',
+        'libopus',
+        webm.uri,
+      ])
+      assert(result.success, result.failStackTrace ?? result.output)
+
+      const information = (await getMediaInformation(
+        webm.uri
+      )) as MediaInformation
+      const codecs = (information.streams ?? []).map(
+        (stream) => stream.codec_name
+      )
+      assert(codecs.includes('vp9'), `expected vp9, got ${codecs.join(', ')}`)
+      assert(codecs.includes('opus'), `expected opus, got ${codecs.join(', ')}`)
+      return `${webm.size} bytes, ${codecs.join(' + ')}`
+    })
+  )
+
+  const hevc = await pickEncoder(HEVC_ENCODERS)
+
+  record(
+    await run(
+      `Encodes HEVC with ${hevc ?? 'no available encoder'}`,
+      async () => {
+        assert(hevc, `none of ${HEVC_ENCODERS.join(', ')} are available`)
+        const output = new File(directory, 'clip-hevc.mp4')
+        const result = await execute([
+          '-y',
+          '-hide_banner',
+          '-i',
+          video.uri,
+          ...videoEncoderArguments(hevc),
+          '-tag:v',
+          'hvc1',
+          output.uri,
+        ])
+        assert(result.success, result.failStackTrace ?? result.output)
+
+        const information = (await getMediaInformation(
+          output.uri
+        )) as MediaInformation
+        assert(
+          information.streams?.[0]?.codec_name === 'hevc',
+          `expected hevc, got ${information.streams?.[0]?.codec_name}`
+        )
+        return `${output.size} bytes`
+      }
+    )
+  )
+
+  record(
+    await run('Runs a multi-step filter graph (animated GIF)', async () => {
+      const gif = new File(directory, 'clip.gif')
+      const result = await execute([
+        '-y',
+        '-hide_banner',
+        '-i',
+        video.uri,
+        '-filter_complex',
+        'fps=8,scale=80:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse',
+        gif.uri,
+      ])
+      assert(result.success, result.failStackTrace ?? result.output)
+
+      const information = (await getMediaInformation(
+        gif.uri
+      )) as MediaInformation
+      assert(
+        information.streams?.[0]?.codec_name === 'gif',
+        `expected gif, got ${information.streams?.[0]?.codec_name}`
+      )
+      return `${gif.size} bytes, ${information.streams?.[0]?.width}px wide`
+    })
+  )
+
+  record(
+    await run('Concatenates two clips', async () => {
+      const listPath = new File(directory, 'concat.txt')
+      const plain = normalizePath(video.uri)
+      listPath.create({ overwrite: true })
+      listPath.write(`file '${plain}'\nfile '${plain}'\n`)
+
+      const joined = new File(directory, 'joined.mp4')
+      const result = await execute([
+        '-y',
+        '-hide_banner',
+        '-f',
+        'concat',
+        '-safe',
+        '0',
+        '-i',
+        normalizePath(listPath.uri),
+        '-c',
+        'copy',
+        joined.uri,
+      ])
+      assert(result.success, result.failStackTrace ?? result.output)
+
+      const information = (await getMediaInformation(
+        joined.uri
+      )) as MediaInformation
+      const duration = Number(information.format?.duration ?? 'NaN')
+      assert(
+        duration > SOURCE_SECONDS * 1.8,
+        `expected roughly ${(SOURCE_SECONDS * 2).toFixed(2)}s, got ${duration}`
+      )
+      return `${duration.toFixed(3)}s from two copies`
+    })
+  )
+
+  record(
+    await run('Resamples audio to 44.1 kHz stereo', async () => {
+      const resampled = new File(directory, 'resampled.wav')
+      const result = await execute([
+        '-y',
+        '-hide_banner',
+        '-i',
+        source.uri,
+        '-ar',
+        '44100',
+        '-ac',
+        '2',
+        resampled.uri,
+      ])
+      assert(result.success, result.failStackTrace ?? result.output)
+
+      const information = (await getMediaInformation(
+        resampled.uri
+      )) as MediaInformation
+      const stream = information.streams?.[0]
+      assert(
+        stream?.sample_rate === '44100' && stream?.channels === 2,
+        `got ${stream?.sample_rate} Hz, ${stream?.channels} channels`
+      )
+      return '44100 Hz, 2 channels'
+    })
+  )
+
+  record(
+    await run(
+      'Handles paths with spaces and non-ASCII characters',
+      async () => {
+        const awkward = new File(directory, 'clip with spaces é 漢字.mp4')
+        const result = await execute([
+          '-y',
+          '-hide_banner',
+          '-i',
+          video.uri,
+          '-c',
+          'copy',
+          awkward.uri,
+        ])
+        assert(result.success, result.failStackTrace ?? result.output)
+        assert((awkward.size ?? 0) > 0, 'no output written')
+
+        const information = (await getMediaInformation(
+          awkward.uri
+        )) as MediaInformation
+        assert(information.streams?.length === 1, 'could not probe the output')
+        return `${awkward.size} bytes`
+      }
+    )
+  )
+
+  record(
+    await run('Runs two sessions concurrently', async () => {
+      const first = new File(directory, 'concurrent-1.m4a')
+      const second = new File(directory, 'concurrent-2.m4a')
+      const ids: number[] = []
+
+      const [one, two] = await Promise.all([
+        execute(
+          ['-y', '-hide_banner', '-i', source.uri, '-c:a', 'aac', first.uri],
+          undefined,
+          undefined,
+          (id) => ids.push(id)
+        ),
+        execute(
+          ['-y', '-hide_banner', '-i', source.uri, '-c:a', 'aac', second.uri],
+          undefined,
+          undefined,
+          (id) => ids.push(id)
+        ),
+      ])
+
+      assert(one.success, one.failStackTrace ?? one.output)
+      assert(two.success, two.failStackTrace ?? two.output)
+      assert(ids.length === 2, `expected 2 session IDs, got ${ids.length}`)
+      assert(ids[0] !== ids[1], 'both sessions reported the same ID')
+      assert(one.sessionId !== two.sessionId, 'results share a session ID')
+      return `sessions ${ids.join(' and ')} both completed`
+    })
+  )
+
+  record(
+    await run('cancelAll() stops every running session', async () => {
+      const longRun = (name: string) =>
+        execute([
+          '-y',
+          '-hide_banner',
+          '-stream_loop',
+          '-1',
+          ...rawVideoInput(raw.uri),
+          '-t',
+          '600',
+          '-vf',
+          'scale=1280:720',
+          ...videoEncoderArguments(h264 ?? 'mpeg4'),
+          new File(directory, name).uri,
+        ])
+
+      const running = [longRun('all-1.mp4'), longRun('all-2.mp4')]
+      await new Promise((resolve) => setTimeout(resolve, 900))
+      cancelAll()
+
+      const results = await Promise.all(running)
+      assert(
+        results.every((result) => result.cancelled),
+        `states: ${results.map((result) => result.state).join(', ')}`
+      )
+      return `${results.length} sessions cancelled`
+    })
+  )
+
+  record(
+    await run('Reports HTTPS protocol support', async () => {
+      const result = await execute(['-hide_banner', '-protocols'])
+      assert(result.success, result.failStackTrace ?? result.output)
+      const protocols = result.output
+      assert(/\bhttps\b/.test(protocols), 'https protocol missing')
+      assert(/\btls\b/.test(protocols), 'tls protocol missing')
+      return 'https and tls available'
+    })
+  )
+
+  record(
+    await run('Reports failure for an unknown encoder', async () => {
+      const result = await execute([
+        '-y',
+        '-hide_banner',
+        '-i',
+        source.uri,
+        '-c:a',
+        'definitely_not_an_encoder',
+        new File(directory, 'never.m4a').uri,
+      ])
+      assert(!result.success, 'an unknown encoder unexpectedly succeeded')
+      assert(
+        /Unknown encoder|Encoder not found|not found/i.test(result.output),
+        `unexpected output: ${result.output.slice(0, 120)}`
+      )
+      return `returnCode ${result.returnCode}`
     })
   )
 

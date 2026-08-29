@@ -259,7 +259,7 @@ No camera, microphone, photo-library, or storage permission is added automatical
 FFmpeg runs natively and needs a path or URI the native process can access.
 
 - Prefer files inside your app's document, cache, or temporary directory.
-- `file://` URIs and plain local paths are the most predictable inputs and outputs.
+- `file://` URIs and plain local paths both work. The package strips the `file://` scheme and percent-decoding for you, so a path containing spaces or non-ASCII characters is handled correctly; passing the raw URI straight to FFmpeg would write to a file literally named `my%20clip.mp4`.
 - On Android, copy a `content://` document into application storage before processing when the native library cannot open it directly.
 - Copy photo-library or document-picker assets when the provider gives temporary or security-scoped access.
 - Ensure the output directory already exists.
@@ -424,6 +424,16 @@ function pickEncoder(candidates: string[]): Promise<string | undefined>
 ```typescript
 const hevc = await pickEncoder(['libx265', 'hevc_videotoolbox'])
 ```
+
+### `normalizePath(value)`
+
+Converts a `file://` URI into the plain path FFmpeg expects, and returns anything else untouched.
+
+```typescript
+function normalizePath(value: string): string
+```
+
+`execute()`, `probe()`, and `getMediaInformation()` already apply this to every argument, so you rarely need to call it directly. It is exported for cases where you build a path yourself — a concat list file, for example, whose entries FFmpeg reads verbatim.
 
 ### `FFmpegSessionResult`
 
@@ -657,7 +667,7 @@ Nitrogen output under `nitrogen/generated` is committed. Change the `.nitro.ts` 
 
 ### Example app
 
-`example/` is an Expo app that runs a device test suite covering the encoders, the filter graph, both callback streams, FFprobe, cancellation, and failure reporting. Results are rendered on screen, written to `munim-ffmpeg-suite.json` in the app's document directory, and logged as `MUNIM_FFMPEG_SUITE_RESULT`.
+`example/` is an Expo app that runs a 24-check device suite: H.264 and HEVC encoding, VP9/Opus in WebM, MP3, AAC, scaling and multi-step filter graphs, muxing, demuxing, trimming, concatenation, thumbnails, audio resampling, awkward file paths, concurrent sessions, single and global cancellation, protocol support, and both failure paths. Fixtures are generated in JavaScript, so the suite needs no network or bundled media. Results are rendered on screen, written to `munim-ffmpeg-suite.json` in the app's document directory, and logged as `MUNIM_FFMPEG_SUITE_RESULT`.
 
 ```bash
 npm run example:ios

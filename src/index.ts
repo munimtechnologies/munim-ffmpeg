@@ -18,13 +18,40 @@ export type {
   MunimFfmpegSpec,
 }
 
+const FILE_URI_SCHEME = /^file:\/\//
+
+/**
+ * Converts a `file://` URI into the plain path FFmpeg expects.
+ *
+ * `expo-file-system` and `react-native-fs` hand back percent-encoded URIs, but
+ * FFmpeg's file protocol treats what follows `file://` literally: a path with a
+ * space silently becomes a file named `my%20clip.mp4`. Anything that is not a
+ * `file://` URI is returned untouched, so pipes, `content://`, and remote URLs
+ * still work.
+ */
+export function normalizePath(value: string): string {
+  if (!FILE_URI_SCHEME.test(value)) return value
+
+  const path = value.replace(FILE_URI_SCHEME, '')
+  try {
+    return decodeURIComponent(path)
+  } catch {
+    return path
+  }
+}
+
 export function execute(
   arguments_: string[],
   onLog?: FFmpegLogCallback,
   onStatistics?: FFmpegStatisticsCallback,
   onSessionCreated?: FFmpegSessionCreatedCallback
 ): Promise<FFmpegSessionResult> {
-  return MunimFfmpeg.execute(arguments_, onLog, onStatistics, onSessionCreated)
+  return MunimFfmpeg.execute(
+    arguments_.map(normalizePath),
+    onLog,
+    onStatistics,
+    onSessionCreated
+  )
 }
 
 export function probe(
@@ -32,11 +59,15 @@ export function probe(
   onLog?: FFmpegLogCallback,
   onSessionCreated?: FFmpegSessionCreatedCallback
 ): Promise<FFmpegSessionResult> {
-  return MunimFfmpeg.probe(arguments_, onLog, onSessionCreated)
+  return MunimFfmpeg.probe(
+    arguments_.map(normalizePath),
+    onLog,
+    onSessionCreated
+  )
 }
 
 export function getMediaInformation(path: string): Promise<unknown> {
-  return MunimFfmpeg.getMediaInformation(path).then((value) =>
+  return MunimFfmpeg.getMediaInformation(normalizePath(path)).then((value) =>
     JSON.parse(value)
   )
 }

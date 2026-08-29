@@ -1,24 +1,77 @@
-// A dependency-free 100 ms 8 kHz mono PCM WAV fixture. Keeping it in source keeps
-// the device suite self-contained: no network, no bundled binary assets.
-export const SMOKE_WAV_BASE64 =
-  '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'
+// Media fixtures generated in JavaScript. Keeping them in code makes the device
+// suite self-contained: no network, no bundled binary assets, and no reliance on
+// FFmpeg input generators (the Android build has `lavfi` disabled).
 
-export function decodeBase64(value: string) {
-  const alphabet =
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-  const bytes: number[] = []
-  const input = value.replace(/\s/g, '')
+export const AUDIO_SAMPLE_RATE = 8000
 
-  for (let index = 0; index < input.length; index += 4) {
-    const first = alphabet.indexOf(input[index] ?? '')
-    const second = alphabet.indexOf(input[index + 1] ?? '')
-    const third = alphabet.indexOf(input[index + 2] ?? '')
-    const fourth = alphabet.indexOf(input[index + 3] ?? '')
+/**
+ * A mono 16-bit PCM WAV containing a short tone sweep.
+ *
+ * Generated at full length rather than looped by FFmpeg: `-stream_loop -1` on an
+ * input never terminates, even with `-t` bounding the output.
+ */
+export function wavFixture(seconds: number) {
+  const sampleRate = AUDIO_SAMPLE_RATE
+  const sampleCount = Math.round(sampleRate * seconds)
+  const dataBytes = sampleCount * 2
+  const bytes = new Uint8Array(44 + dataBytes)
+  const view = new DataView(bytes.buffer)
 
-    bytes.push((first << 2) | (second >> 4))
-    if (third >= 0) bytes.push(((second & 15) << 4) | (third >> 2))
-    if (fourth >= 0) bytes.push(((third & 3) << 6) | fourth)
+  const ascii = (offset: number, text: string) => {
+    for (let index = 0; index < text.length; index += 1) {
+      bytes[offset + index] = text.charCodeAt(index)
+    }
   }
 
-  return Uint8Array.from(bytes)
+  ascii(0, 'RIFF')
+  view.setUint32(4, 36 + dataBytes, true)
+  ascii(8, 'WAVE')
+  ascii(12, 'fmt ')
+  view.setUint32(16, 16, true) // PCM header size
+  view.setUint16(20, 1, true) // PCM
+  view.setUint16(22, 1, true) // mono
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * 2, true) // byte rate
+  view.setUint16(32, 2, true) // block align
+  view.setUint16(34, 16, true) // bits per sample
+  ascii(36, 'data')
+  view.setUint32(40, dataBytes, true)
+
+  for (let index = 0; index < sampleCount; index += 1) {
+    const time = index / sampleRate
+    const frequency = 220 + 160 * Math.sin(time)
+    const amplitude = Math.sin(2 * Math.PI * frequency * time)
+    view.setInt16(44 + index * 2, Math.round(amplitude * 0x6000), true)
+  }
+
+  return bytes
+}
+
+const RAW_WIDTH = 160
+const RAW_HEIGHT = 120
+
+export const RAW_VIDEO = {
+  width: RAW_WIDTH,
+  height: RAW_HEIGHT,
+  fps: 15,
+  frames: 45,
+}
+
+/** Raw rgb24 frames, fed to FFmpeg with `-f rawvideo`. */
+export function rawVideoFrames() {
+  const frameSize = RAW_WIDTH * RAW_HEIGHT * 3
+  const bytes = new Uint8Array(frameSize * RAW_VIDEO.frames)
+
+  for (let frame = 0; frame < RAW_VIDEO.frames; frame += 1) {
+    for (let y = 0; y < RAW_HEIGHT; y += 1) {
+      for (let x = 0; x < RAW_WIDTH; x += 1) {
+        const offset = frame * frameSize + (y * RAW_WIDTH + x) * 3
+        bytes[offset] = (x * 2 + frame * 12) & 0xff
+        bytes[offset + 1] = (y * 2) & 0xff
+        bytes[offset + 2] = (x + y) & 0xff
+      }
+    }
+  }
+
+  return bytes
 }
