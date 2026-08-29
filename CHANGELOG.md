@@ -1,3 +1,17 @@
+## [0.2.0](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.1.1...v0.2.0) (2026-08-29)
+
+### ✨ Features
+
+* flatten the repository and verify FFmpeg on real devices ([78ebecd](https://github.com/munimtechnologies/munim-ffmpeg/commit/78ebecd97cb6c1d163f7e6f37099d9c73f2501a9))
+
+### 🐛 Bug Fixes
+
+* decode file:// URIs and broaden the device suite to 24 checks ([12f5d02](https://github.com/munimtechnologies/munim-ffmpeg/commit/12f5d023407f412d0a71ac5b8460d5ed1e1f3b2c))
+
+### 📚 Documentation
+
+* hand the changelog over to semantic-release ([a686179](https://github.com/munimtechnologies/munim-ffmpeg/commit/a686179f5435f41c094b4491d29c060a2d1f4abe))
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
