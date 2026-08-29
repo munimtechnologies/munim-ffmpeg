@@ -1,3 +1,15 @@
+## [0.3.0](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.2.0...v0.3.0) (2026-08-29)
+
+### ✨ Features
+
+* build on FFmpeg 9.0.1 with in-process fftools on both platforms ([1714fcd](https://github.com/munimtechnologies/munim-ffmpeg/commit/1714fcdbf3edb5ab8acf7658ae8117697993772b))
+* ship every architecture and download binaries on install ([b837ac3](https://github.com/munimtechnologies/munim-ffmpeg/commit/b837ac3c553960b7424a3b771c17744e9752298f))
+
+### 🛠️ Other changes
+
+* keep the FFmpeg binaries out of the npm tarball ([ecb2cbf](https://github.com/munimtechnologies/munim-ffmpeg/commit/ecb2cbfdb958eddb5f56b90f990517cc053551a2))
+* sync package-lock with the 0.2.0 release ([17f9487](https://github.com/munimtechnologies/munim-ffmpeg/commit/17f94876920431df316f3747506c175487aad56c))
+
 ## [0.2.0](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.1.1...v0.2.0) (2026-08-29)
 
 ### ✨ Features
