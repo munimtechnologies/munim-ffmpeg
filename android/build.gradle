@@ -23,9 +23,11 @@ apply plugin: 'org.jetbrains.kotlin.android'
 apply from: '../nitrogen/generated/android/NitroMunimFfmpeg+autolinking.gradle'
 apply from: "./fix-prefab.gradle"
 
-if (isNewArchitectureEnabled()) {
-  apply plugin: "com.facebook.react"
-}
+// Deliberately not applying the "com.facebook.react" plugin: Nitro generates
+// its own bindings, and the React plugin also emits React Native's own
+// TurboModule specs into this library. Those then collide with the app's copies
+// and every consumer's release build fails with "Type
+// com.facebook.fbreact.specs.* is defined multiple times".
 
 def getExtOrDefault(name) {
   return rootProject.ext.has(name) ? rootProject.ext.get(name) : project.properties["NitroMunimFfmpeg_" + name]

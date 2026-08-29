@@ -137,14 +137,14 @@ Codec availability is determined by the native FFmpeg builds described in [Bundl
 
 ## Where this is verified
 
-Every release runs the example's 24-check device suite. For 0.3.x:
+Every release runs the example's 25-check device suite. For 0.4.x:
 
 | Target | Result |
 | --- | --- |
-| iPad Air (M3), iOS 26 | 24/24 |
-| iOS Simulator, arm64 | 24/24 |
-| Galaxy A14 5G, arm64-v8a | 24/24 |
-| Android emulator, arm64 | 13/24 — see below |
+| iPad Air (M3), iOS 26 | 25/25 |
+| iOS Simulator, arm64 | 25/25 |
+| Galaxy A14 5G, arm64-v8a | 25/25 |
+| Android emulator, arm64 | Software encoding passes; hardware encoding does not — see below |
 | Android `armeabi-v7a`, `x86_64` | Built and statically checked, not executed |
 
 `x86_64` cannot be run on an Apple Silicon machine: the Android emulator refuses non-native system images, and no x86_64 hardware was available. Both remaining ABIs were verified to be correct ELF binaries with the right architecture, the expected JNI exports, only system libraries unresolved, and the same FFmpeg 9.0.1 and codec set as arm64.
@@ -692,7 +692,7 @@ Nitrogen output under `nitrogen/generated` is committed. Change the `.nitro.ts` 
 
 ### Example app
 
-`example/` is an Expo app that runs a 24-check device suite: H.264 and HEVC encoding, VP9/Opus in WebM, MP3, AAC, scaling and multi-step filter graphs, muxing, demuxing, trimming, concatenation, thumbnails, audio resampling, awkward file paths, concurrent sessions, single and global cancellation, protocol support, and both failure paths. Fixtures are generated in JavaScript, so the suite needs no network or bundled media. Results are rendered on screen, written to `munim-ffmpeg-suite.json` in the app's document directory, and logged as `MUNIM_FFMPEG_SUITE_RESULT`.
+`example/` is an Expo app that runs a 25-check device suite: H.264 and HEVC encoding, VP9/Opus in WebM, MP3, AAC, scaling and multi-step filter graphs, software H.264 via openh264, muxing, demuxing, trimming, concatenation, thumbnails, audio resampling, awkward file paths, concurrent sessions, single and global cancellation, protocol support, and both failure paths. Fixtures are generated in JavaScript, so the suite needs no network or bundled media. Results are rendered on screen, written to `munim-ffmpeg-suite.json` in the app's document directory, and logged as `MUNIM_FFMPEG_SUITE_RESULT`.
 
 ```bash
 npm run example:ios

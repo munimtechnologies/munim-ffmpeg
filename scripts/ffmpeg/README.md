@@ -89,7 +89,7 @@ do not have to be rediscovered.
 
 ## Testing a build
 
-The example app runs a 24-check suite covering encoding, muxing, trimming,
+The example app runs a 25-check suite covering encoding, muxing, trimming,
 filters, FFprobe, cancellation and protocols. Run it on a physical device for
 each platform; `npm run example:ios` and `npm run example:android` install it.
 
