@@ -28,7 +28,6 @@ example/ios/
 example/android/
 
 # FFmpeg binaries, produced by scripts/ffmpeg/ and distributed separately
-ios/vendor/
 ios/MunimFFmpeg.xcframework/
 android/src/main/jniLibs/
 dist-binaries/
