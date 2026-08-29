@@ -1,3 +1,13 @@
+## [0.4.2](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.4.1...v0.4.2) (2026-08-29)
+
+### 📚 Documentation
+
+* verify x86_64 on real hardware, and correct the Gradle note ([b9e4155](https://github.com/munimtechnologies/munim-ffmpeg/commit/b9e41558a3204f0cc05d40858aee8223410104a8))
+
+### 🛠️ Other changes
+
+* sync package-lock with the 0.4.1 release ([8ab433d](https://github.com/munimtechnologies/munim-ffmpeg/commit/8ab433d324eada4906d859847a6d33208385ccbe))
+
 ## [0.4.1](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.4.0...v0.4.1) (2026-08-29)
 
 ### 🐛 Bug Fixes
