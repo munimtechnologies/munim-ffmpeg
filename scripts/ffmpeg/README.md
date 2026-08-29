@@ -34,10 +34,11 @@ defaults with `ANDROID_NDK`, `FFMPEG_VERSION`, `FFMPEG_WORKSPACE`, `MIN_IOS`.
 | Architectures | arm64 device, arm64 + x86_64 simulator | arm64-v8a, armeabi-v7a, x86_64 |
 | Hardware codecs | VideoToolbox, AudioToolbox | MediaCodec |
 | TLS | SecureTransport | mbedTLS |
-| External libraries | LAME, Opus, libvpx, dav1d | LAME, Opus, libvpx, dav1d |
+| External libraries | LAME, Opus, libvpx, dav1d, openh264 | LAME, Opus, libvpx, dav1d, openh264, mbedTLS |
 
-No x264, x265, xvid or vid.stab: the package stays LGPL, and H.264/HEVC come
-from the platform's hardware encoder.
+No x264, x265, xvid or vid.stab: the package stays LGPL. H.264 and HEVC come
+from the platform's hardware encoder, with openh264 (BSD) as a software H.264
+fallback for environments where hardware encoding is unavailable.
 
 ## Why fftools rather than a wrapper library
 
@@ -82,6 +83,9 @@ do not have to be rediscovered.
   but not during `configure`, whose probe programs then fail.
 - **CocoaPods**: refuses an xcframework whose static libraries have differing
   binary names, so the simulator fat library is also `libmunimffmpeg.a`.
+- **openh264** is C++, so FFmpeg needs `--extra-libs=-lc++_shared` on Android
+  and `-lc++` on iOS, plus `--pkg-config-flags=--static` to pick up the
+  dependency from its `.pc` file.
 
 ## Testing a build
 
@@ -91,8 +95,9 @@ each platform; `npm run example:ios` and `npm run example:android` install it.
 
 Two environments cannot validate everything:
 
-- **Android emulators** have no working MediaCodec encoder, so every check that
-  encodes video fails there while audio, filters and FFprobe pass.
+- **Android emulators** have no working MediaCodec encoder: it reports success
+  and writes no frames. The software H.264 check (`libopenh264`) passes there,
+  the hardware ones do not.
 - **x86_64 Android** cannot run on an Apple Silicon host at all — the emulator
   refuses non-native system images. Validate that ABI on an Intel or Linux
   machine, or statically: correct ELF architecture, four `Java_..._FFmpegNative`

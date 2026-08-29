@@ -50,7 +50,12 @@ function workspace() {
 // Which H.264/HEVC encoder exists depends entirely on how the bundled FFmpeg
 // was built: libx264 in a GPL build, VideoToolbox on iOS, MediaCodec on
 // Android. Asking at runtime is the only portable approach.
-const H264_ENCODERS = ['libx264', 'h264_videotoolbox', 'h264_mediacodec']
+const H264_ENCODERS = [
+  'libx264',
+  'h264_videotoolbox',
+  'h264_mediacodec',
+  'libopenh264',
+]
 const HEVC_ENCODERS = ['libx265', 'hevc_videotoolbox', 'hevc_mediacodec']
 
 // The Android build is compiled with `--disable-indev=lavfi`, so the usual
@@ -203,6 +208,40 @@ export async function runSuite(
         return `${video.size} bytes, ${logs.length} logs, ${statistics} statistics events`
       }
     )
+  )
+
+  record(
+    await run('Encodes H.264 in software (libopenh264)', async () => {
+      const encoders = await listEncoders()
+      assert(
+        encoders.includes('libopenh264'),
+        'libopenh264 missing from this build'
+      )
+
+      const software = new File(directory, 'software-h264.mp4')
+      const result = await execute([
+        '-y',
+        '-hide_banner',
+        ...rawVideoInput(raw.uri),
+        ...videoEncoderArguments('libopenh264'),
+        software.uri,
+      ])
+      assert(result.success, result.failStackTrace ?? result.output)
+
+      // Hardware encoders can report success while writing nothing, so the
+      // output is probed rather than trusted.
+      const information = (await getMediaInformation(
+        software.uri
+      )) as MediaInformation
+      const stream = information.streams?.find(
+        (candidate) => candidate.codec_type === 'video'
+      )
+      assert(
+        stream?.codec_name === 'h264',
+        `expected h264, got ${stream?.codec_name}`
+      )
+      return `${software.size} bytes, ${stream?.width}x${stream?.height}`
+    })
   )
 
   record(

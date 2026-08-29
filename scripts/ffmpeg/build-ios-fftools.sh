@@ -66,19 +66,13 @@ done
 
 "$CC" "${CFLAGS[@]}" -c "$HERE/src/munim_ffmpeg_core.c" -o "$WORK/obj/munim_ffmpeg_core.o"
 
-# One library per slice keeps the xcframework and the download simple.
+# One library per slice keeps the xcframework and the download simple. Every
+# static library in the prefix is merged, so adding a dependency to the build
+# scripts does not also require editing this list.
+rm -f "$PREFIX/lib/libmunimffmpeg.a"
 xcrun libtool -static -no_warning_for_no_symbols \
   -o "$PREFIX/lib/libmunimffmpeg.a" \
   $(find "$WORK/obj" "$WORK/probe" -name '*.o') \
-  "$PREFIX/lib/libavcodec.a" \
-  "$PREFIX/lib/libavfilter.a" \
-  "$PREFIX/lib/libavformat.a" \
-  "$PREFIX/lib/libavutil.a" \
-  "$PREFIX/lib/libswresample.a" \
-  "$PREFIX/lib/libswscale.a" \
-  "$PREFIX/lib/libmp3lame.a" \
-  "$PREFIX/lib/libopus.a" \
-  "$PREFIX/lib/libvpx.a" \
-  "$PREFIX/lib/libdav1d.a"
+  "$PREFIX"/lib/*.a
 
 echo "  built $(basename "$PREFIX")/lib/libmunimffmpeg.a ($(du -h "$PREFIX/lib/libmunimffmpeg.a" | cut -f1))"

@@ -127,6 +127,37 @@ EOF
   ) > "$WORKSPACE/build/dav1d-$SLICE.log" 2>&1
 fi
 
+if [ ! -f "$PREFIX/lib/libopenh264.a" ]; then
+  echo "  openh264"
+  fetch "https://github.com/cisco/openh264/archive/refs/tags/v2.6.0.tar.gz" openh264-2.6.0.tar.gz
+  unpack openh264-2.6.0.tar.gz "openh264-$SLICE"
+  (
+    cd "$DEPS/openh264-$SLICE"
+    [ "$ARCH" = "arm64" ] && MESON_CPU_FAMILY=aarch64 || MESON_CPU_FAMILY=x86_64
+    cat > cross-openh264.txt <<EOF
+[binaries]
+c = '$CC'
+cpp = '$CXX'
+ar = '$AR'
+strip = '$STRIP'
+[built-in options]
+c_args = ['-arch', '$ARCH', '-isysroot', '$SDK', '$MIN_FLAG']
+cpp_args = ['-arch', '$ARCH', '-isysroot', '$SDK', '$MIN_FLAG']
+c_link_args = ['-arch', '$ARCH', '-isysroot', '$SDK', '$MIN_FLAG']
+cpp_link_args = ['-arch', '$ARCH', '-isysroot', '$SDK', '$MIN_FLAG']
+[host_machine]
+system = 'darwin'
+subsystem = '$MESON_SUBSYSTEM'
+cpu_family = '$MESON_CPU_FAMILY'
+cpu = '$MESON_CPU_FAMILY'
+endian = 'little'
+EOF
+    meson setup build --cross-file cross-openh264.txt --prefix="$PREFIX" \
+      --default-library=static --buildtype=release -Dtests=disabled
+    ninja -C build && ninja -C build install
+  ) > "$WORKSPACE/build/openh264-$SLICE.log" 2>&1
+fi
+
 echo "==> FFmpeg for $SLICE"
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig"
 rm -rf "$BUILD"; mkdir -p "$BUILD"; cd "$BUILD"
@@ -141,12 +172,14 @@ rm -rf "$BUILD"; mkdir -p "$BUILD"; cd "$BUILD"
   --cc="$CC" --cxx="$CXX" --ar="$AR" --ranlib="$RANLIB" --strip="$STRIP" \
   --extra-cflags="$CFLAGS -I$PREFIX/include" \
   --extra-ldflags="$LDFLAGS -L$PREFIX/lib" \
+  --extra-libs="-lc++" \
+  --pkg-config-flags=--static \
   --disable-autodetect \
   --enable-static --disable-shared --enable-pic \
   --enable-asm \
   --enable-videotoolbox --enable-audiotoolbox --enable-securetransport \
   --enable-zlib --enable-libmp3lame --enable-libopus --enable-libvpx \
-  --enable-libdav1d \
+  --enable-libdav1d --enable-libopenh264 \
   --enable-pthreads --enable-swscale --enable-avfilter --enable-network \
   --enable-protocol=file,pipe,http,tcp,https,tls,crypto,data,concat,concatf \
   --disable-programs --disable-doc --disable-debug --disable-vulkan \

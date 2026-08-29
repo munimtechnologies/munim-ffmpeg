@@ -140,6 +140,38 @@ EOF
   ) > "$WORKSPACE/build/dav1d-$ABI.log" 2>&1
 fi
 
+if [ ! -f "$PREFIX/lib/libopenh264.a" ]; then
+  echo "  openh264"
+  fetch "https://github.com/cisco/openh264/archive/refs/tags/v2.6.0.tar.gz" openh264-2.6.0.tar.gz
+  unpack openh264-2.6.0.tar.gz "openh264-$ABI"
+  (
+    cd "$DEPS/openh264-$ABI"
+    case "$ABI" in
+      arm64-v8a)   MESON_CPU_FAMILY=aarch64; MESON_CPU=aarch64 ;;
+      armeabi-v7a) MESON_CPU_FAMILY=arm;     MESON_CPU=armv7 ;;
+      x86_64)      MESON_CPU_FAMILY=x86_64;  MESON_CPU=x86_64 ;;
+    esac
+    cat > cross-openh264.txt <<EOF
+[binaries]
+c = '$CC'
+cpp = '$CXX'
+ar = '$AR'
+strip = '$STRIP'
+[built-in options]
+c_args = [$(printf "'%s', " $CFLAGS | sed 's/, $//')]
+cpp_args = [$(printf "'%s', " $CFLAGS | sed 's/, $//')]
+[host_machine]
+system = 'android'
+cpu_family = '$MESON_CPU_FAMILY'
+cpu = '$MESON_CPU'
+endian = 'little'
+EOF
+    meson setup build --cross-file cross-openh264.txt --prefix="$PREFIX" \
+      --default-library=static --buildtype=release -Dtests=disabled
+    ninja -C build && ninja -C build install
+  ) > "$WORKSPACE/build/openh264-$ABI.log" 2>&1
+fi
+
 if [ ! -f "$PREFIX/lib/libmbedtls.a" ]; then
   echo "  mbedTLS"
   fetch "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.2/mbedtls-3.6.2.tar.bz2" mbedtls-3.6.2.tar.bz2
@@ -169,13 +201,14 @@ rm -rf "$BUILD"; mkdir -p "$BUILD"; cd "$BUILD"
   --cc="$CC" --cxx="$CXX" --ar="$AR" --nm="$NM" --ranlib="$RANLIB" --strip="$STRIP" \
   --extra-cflags="$CFLAGS -I$PREFIX/include" \
   --extra-ldflags="$LDFLAGS -L$PREFIX/lib" \
+  --extra-libs="-lc++_shared" \
   --pkg-config-flags=--static \
   --disable-autodetect \
   --enable-shared --disable-static --enable-pic \
   --enable-asm --enable-inline-asm \
   --enable-jni --enable-mediacodec \
   --enable-zlib --enable-libmp3lame --enable-libopus --enable-libvpx \
-  --enable-libdav1d --enable-mbedtls --enable-version3 \
+  --enable-libdav1d --enable-libopenh264 --enable-mbedtls --enable-version3 \
   --enable-pthreads --enable-swscale --enable-avfilter --enable-network \
   --enable-protocol=file,pipe,http,tcp,https,tls,crypto,data,concat,concatf \
   --disable-programs --disable-doc --disable-debug --disable-vulkan \

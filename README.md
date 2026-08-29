@@ -153,13 +153,16 @@ Every release runs the example's 24-check device suite. For 0.3.x:
 
 An Android emulator has no working MediaCodec **encoder**. `h264_mediacodec` and `hevc_mediacodec` report success and produce a file containing no frames, so anything downstream of an encode fails. Everything else — audio encoding, filters, FFprobe, muxing, cancellation, protocols — works normally there.
 
-This is an emulator limitation, not a package one, but it is worth knowing before debugging: **test video encoding on a physical device**. If you need encoding to work in an emulator, encode to a software codec the build does provide:
+This is an emulator limitation, not a package one, but it is worth knowing before debugging: **test video encoding on a physical device**.
+
+`pickEncoder` cannot detect it, because MediaCodec *is* present in an emulator — it just does not work. When you need encoding to succeed regardless of environment, ask for the software encoder by name:
 
 ```typescript
-const encoder = await pickEncoder(['h264_videotoolbox', 'h264_mediacodec', 'mpeg4'])
+// Deterministic anywhere: emulators, CI, older devices.
+await execute(['-y', '-i', input, '-c:v', 'libopenh264', '-pix_fmt', 'yuv420p', output])
 ```
 
-`mpeg4` and `libvpx-vp9` are software encoders and work everywhere. There is deliberately no software H.264 encoder: `libx264` is GPL, and bundling it would make every app using this package GPL too.
+`libopenh264`, `mpeg4` and `libvpx-vp9` are all software encoders and work everywhere.
 
 ## Bundled FFmpeg builds
 
@@ -173,7 +176,7 @@ Both platforms run **FFmpeg 9.0.1**, built from [ffmpeg.org](https://www.ffmpeg.
 | TLS | SecureTransport | mbedTLS |
 | Minimum | iOS 15.1 | API 24, 16 KB pages |
 
-Linked libraries, identical on both: **LAME** (MP3), **Opus**, **libvpx** (VP8/VP9), **dav1d** (AV1 decoding), plus everything FFmpeg builds natively.
+Linked libraries, identical on both: **LAME** (MP3), **Opus**, **libvpx** (VP8/VP9), **dav1d** (AV1 decoding), **openh264** (software H.264), plus everything FFmpeg builds natively.
 
 FFmpeg's own `ffmpeg` and `ffprobe` tools are compiled to run inside your app process, so the argument arrays you pass are handled by the real command-line code paths rather than a reimplementation.
 
@@ -181,20 +184,26 @@ FFmpeg's own `ffmpeg` and `ffprobe` tools are compiled to run inside your app pr
 
 Verified by running the example's device suite: iOS reports 186 encoders, Android 184. Everything FFmpeg builds natively (`aac`, `alac`, `flac`, `mpeg4`, `mjpeg`, `png`, `gif`, `pcm_*`, …) is on both, as are `libmp3lame`, `libopus`, `libvpx`, and `libvpx-vp9`.
 
-H.264 and HEVC come from the platform's hardware encoder, which is faster and smaller than bundling x264 — and keeps the package LGPL:
+H.264 and HEVC come from the platform's hardware encoder, which is faster and uses less power than a software encoder. `libopenh264` is there as a software H.264 fallback for anywhere hardware encoding is unavailable — an emulator, for instance:
 
 | Encoder | iOS | Android |
 | --- | --- | --- |
 | `h264_videotoolbox`, `hevc_videotoolbox`, `prores_videotoolbox` | ✅ | ❌ |
 | `h264_mediacodec`, `hevc_mediacodec`, `vp8_mediacodec`, `vp9_mediacodec` | ❌ | ✅ |
 | `aac_at`, `alac_at` (AudioToolbox) | ✅ | ❌ |
+| `libopenh264` (H.264, software) | ✅ | ✅ |
 
 Resolve the name at runtime instead of branching on `Platform.OS`:
 
 ```typescript
 import { execute, pickEncoder } from 'munim-ffmpeg'
 
-const h264 = await pickEncoder(['h264_videotoolbox', 'h264_mediacodec'])
+// Hardware first, software as the fallback.
+const h264 = await pickEncoder([
+  'h264_videotoolbox',
+  'h264_mediacodec',
+  'libopenh264',
+])
 if (!h264) throw new Error('No H.264 encoder in this build')
 
 await execute(['-y', '-i', inputPath, '-c:v', h264, outputPath])
@@ -622,7 +631,9 @@ if (result.success) {
 
 The JavaScript, TypeScript, Swift, Kotlin, C core, and generated Nitro bridge in this repository are Apache-2.0.
 
-The bundled FFmpeg 9.0.1 is **LGPLv3**, on both platforms. It is configured without `--enable-gpl`, so no x264, x265, xvid, or vid.stab: H.264 and HEVC encoding come from VideoToolbox and MediaCodec instead. The external libraries it does link are LAME (LGPL), Opus (BSD), libvpx (BSD), dav1d (BSD), and mbedTLS (Apache-2.0) on Android.
+The bundled FFmpeg 9.0.1 is **LGPLv3**, on both platforms. It is configured without `--enable-gpl`, so no x264, x265, xvid, or vid.stab. The external libraries it links are LAME (LGPL), Opus (BSD), libvpx (BSD), dav1d (BSD), openh264 (BSD 2-clause), and mbedTLS (Apache-2.0) on Android.
+
+> **A note on H.264 patents.** Hardware encoders are covered by the licences device manufacturers already pay for. Software H.264 encoding through `libopenh264` is not: Cisco's royalty coverage applies to *their* prebuilt binary, and this package builds openh264 from source. If you ship software H.264 encoding at scale, check where you stand with AVC licensing. Hardware encoders avoid the question entirely, which is why `pickEncoder` should list them first.
 
 In practice that means your application does **not** inherit GPL obligations. LGPL still applies: the FFmpeg libraries are linked and their license and notices must be conveyed with your app, and users must be able to relink against a modified FFmpeg. The exact configuration used is recorded in [`scripts/ffmpeg/build-ios.sh`](./scripts/ffmpeg/build-ios.sh) and [`build-android.sh`](./scripts/ffmpeg/build-android.sh), and the binaries can be reproduced from them.
 
