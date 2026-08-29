@@ -1,3 +1,14 @@
+## [0.3.1](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.3.0...v0.3.1) (2026-08-29)
+
+### 📚 Documentation
+
+* record where 0.3.x is verified, and the emulator encoding limit ([5f1d6a9](https://github.com/munimtechnologies/munim-ffmpeg/commit/5f1d6a9c259f11396f4935761f0da5d66a6f98b4))
+
+### 🛠️ Other changes
+
+* drop the stale ios/vendor ignore rule ([d97293a](https://github.com/munimtechnologies/munim-ffmpeg/commit/d97293ad48c27a9d965d0571c468e276cc21652d))
+* sync package-lock with the 0.3.0 release ([90cc964](https://github.com/munimtechnologies/munim-ffmpeg/commit/90cc9646f51995cd75c285c6269e1568d25ee1d2))
+
 ## [0.3.0](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.2.0...v0.3.0) (2026-08-29)
 
 ### ✨ Features
