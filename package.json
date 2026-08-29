@@ -16,7 +16,7 @@
     "android/gradle.properties",
     "android/fix-prefab.gradle",
     "android/CMakeLists.txt",
-    "android/src",
+    "android/src/main/java",
     "cpp",
     "ios/**/*.h",
     "ios/**/*.m",
@@ -27,7 +27,9 @@
     "nitro.json",
     "*.podspec",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "android/src/main/cpp",
+    "android/src/main/AndroidManifest.xml"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
