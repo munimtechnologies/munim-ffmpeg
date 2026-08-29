@@ -68,6 +68,7 @@
 - [📚 Documentation](#-documentation)
 - [🚀 Features](#-features)
 - [Platform support matrix](#platform-support-matrix)
+- [Where this is verified](#where-this-is-verified)
 - [Bundled FFmpeg builds](#bundled-ffmpeg-builds)
 - [📦 Installation](#-installation)
 - [Working with media paths](#working-with-media-paths)
@@ -133,6 +134,32 @@
 | Remote HTTP(S) inputs        | ✅              | ✅              | Both builds link GnuTLS. Remote server behaviour still varies; prefer local files for predictable app workflows.                                         |
 
 Codec availability is determined by the native FFmpeg builds described in [Bundled FFmpeg builds](#bundled-ffmpeg-builds). Do not assume every FFmpeg codec or external library is present.
+
+## Where this is verified
+
+Every release runs the example's 24-check device suite. For 0.3.x:
+
+| Target | Result |
+| --- | --- |
+| iPad Air (M3), iOS 26 | 24/24 |
+| iOS Simulator, arm64 | 24/24 |
+| Galaxy A14 5G, arm64-v8a | 24/24 |
+| Android emulator, arm64 | 13/24 — see below |
+| Android `armeabi-v7a`, `x86_64` | Built and statically checked, not executed |
+
+`x86_64` cannot be run on an Apple Silicon machine: the Android emulator refuses non-native system images, and no x86_64 hardware was available. Both remaining ABIs were verified to be correct ELF binaries with the right architecture, the expected JNI exports, only system libraries unresolved, and the same FFmpeg 9.0.1 and codec set as arm64.
+
+### Android emulators cannot encode video
+
+An Android emulator has no working MediaCodec **encoder**. `h264_mediacodec` and `hevc_mediacodec` report success and produce a file containing no frames, so anything downstream of an encode fails. Everything else — audio encoding, filters, FFprobe, muxing, cancellation, protocols — works normally there.
+
+This is an emulator limitation, not a package one, but it is worth knowing before debugging: **test video encoding on a physical device**. If you need encoding to work in an emulator, encode to a software codec the build does provide:
+
+```typescript
+const encoder = await pickEncoder(['h264_videotoolbox', 'h264_mediacodec', 'mpeg4'])
+```
+
+`mpeg4` and `libvpx-vp9` are software encoders and work everywhere. There is deliberately no software H.264 encoder: `libx264` is GPL, and bundling it would make every app using this package GPL too.
 
 ## Bundled FFmpeg builds
 
