@@ -1,3 +1,13 @@
+## [0.4.1](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.4.0...v0.4.1) (2026-08-29)
+
+### 🐛 Bug Fixes
+
+* **android:** stop bundling React Native's TurboModule specs ([26de4d5](https://github.com/munimtechnologies/munim-ffmpeg/commit/26de4d5c107932839335a795e066f9ed6bb8dde4))
+
+### 🛠️ Other changes
+
+* sync package-lock with the 0.4.0 release ([80385c6](https://github.com/munimtechnologies/munim-ffmpeg/commit/80385c63b8719fba0fca0c69cd14cd52b31e673f))
+
 ## [0.4.0](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.3.1...v0.4.0) (2026-08-29)
 
 ### ✨ Features

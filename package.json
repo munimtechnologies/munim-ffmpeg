@@ -1,6 +1,6 @@
 {
   "name": "munim-ffmpeg",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Fast FFmpeg and FFprobe for Expo and React Native, powered by Nitro Modules",
   "main": "lib/index",
   "module": "lib/index",
