@@ -114,6 +114,7 @@
 - 🚀 **Expo compatible:** Autolinking, config plugin, and an Expo development example
 - 🧪 **Capability discovery:** Ask the bundled build which encoders, decoders, muxers, demuxers, filters, and protocols it actually has
 - 💬 **Subtitle burn-in:** libass renders ASS/SSA and SRT subtitles — styling, positioning, outlines, shadows, and proper Arabic/Urdu shaping via HarfBuzz and FriBidi
+- 📎 **Soft subtitle embedding:** Mux SRT/ASS tracks into MKV or MP4 so players can toggle them without re-encoding the video
 - 🎯 **TypeScript:** Complete public callback and result types
 - 🗂️ **16 KB Android pages:** Built with the alignment Google Play requires
 
@@ -134,6 +135,7 @@
 | Subtitle burn-in             | ✅              | ✅              | libass with system fonts: Core Text on iOS, fontconfig over `/system/fonts` on Android.                                                                  |
 | H.264 encoding               | VideoToolbox    | MediaCodec      | Hardware on both, `libopenh264` as the software fallback; use `pickEncoder(['h264_videotoolbox', 'h264_mediacodec', 'libopenh264'])` instead of hard-coding an encoder. |
 | Remote HTTP(S) inputs        | ✅              | ✅              | iOS links SecureTransport, Android links mbedTLS. Remote server behaviour still varies; prefer local files for predictable app workflows.                 |
+| Soft subtitle embedding      | ✅              | ✅              | Mux SRT/ASS as toggleable tracks (MKV: `srt`/`ass`, MP4: `mov_text`).                                                                 |
 
 Codec availability is determined by the native FFmpeg builds described in [Bundled FFmpeg builds](#bundled-ffmpeg-builds). Do not assume every FFmpeg codec or external library is present.
 
