@@ -1,3 +1,17 @@
+## [0.5.1](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.5.0...v0.5.1) (2026-09-01)
+
+### 🐛 Bug Fixes
+
+* keep concurrent sessions' callbacks and logs apart ([b0987d5](https://github.com/munimtechnologies/munim-ffmpeg/commit/b0987d53ad8b6b3707abf75a92d73a3fe605f5d8))
+
+### 📚 Documentation
+
+* correct encoder and TLS notes left over from pre-LGPL builds ([40f0ba6](https://github.com/munimtechnologies/munim-ffmpeg/commit/40f0ba6bb21d7c6adcb4f2c12cc47df152bc2245))
+
+### 🛠️ Other changes
+
+* sync package-lock with the release ([92a4070](https://github.com/munimtechnologies/munim-ffmpeg/commit/92a4070c9f1375c9f21d7351232af53a0d2f0997))
+
 ## [0.5.0](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.4.2...v0.5.0) (2026-09-01)
 
 ### ✨ Features
