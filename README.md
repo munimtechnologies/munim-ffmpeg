@@ -660,6 +660,38 @@ await execute([
 ])
 ```
 
+### Embed soft subtitles
+
+The other subtitle workflow: instead of burning text into the frames, mux the subtitle file in as its own stream, so players can toggle it and the video is never re-encoded. Each container wants its own subtitle codec — MKV takes `srt` and `ass` (ASS keeps its styling), MP4 takes `mov_text`, WebM takes `webvtt`.
+
+```typescript
+import { execute } from 'munim-ffmpeg'
+
+// MKV with English SRT and styled Urdu ASS tracks, video and audio untouched.
+await execute([
+  '-y',
+  '-i', videoPath, '-i', englishSrtPath, '-i', urduAssPath,
+  '-map', '0:v:0', '-map', '0:a:0', '-map', '1:0', '-map', '2:0',
+  '-c:v', 'copy', '-c:a', 'copy',
+  '-c:s:0', 'srt', '-c:s:1', 'ass',
+  '-metadata:s:s:0', 'language=eng', '-metadata:s:s:0', 'title=English',
+  '-metadata:s:s:1', 'language=urd', '-metadata:s:s:1', 'title=Urdu',
+  outputMkvPath,
+])
+
+// MP4 needs mov_text instead.
+await execute([
+  '-y',
+  '-i', videoPath, '-i', subtitlePath,
+  '-map', '0:v:0', '-map', '0:a:0', '-map', '1:0',
+  '-c:v', 'copy', '-c:a', 'copy', '-c:s', 'mov_text',
+  '-metadata:s:s:0', 'language=eng',
+  outputMp4Path,
+])
+```
+
+Existing subtitle streams survive remuxing with `-map 0 -c copy`, and a soft track can later be burned in with `-vf subtitles=filename=input.mkv:si=0` (the `si` option picks the subtitle stream index).
+
 ### Cancel a long-running command
 
 ```typescript

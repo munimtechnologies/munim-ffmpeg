@@ -40,6 +40,7 @@ type MediaInformation = {
     height?: number
     sample_rate?: string
     channels?: number
+    tags?: { language?: string; title?: string }
   }[]
   format?: { format_name?: string; duration?: string }
 }
@@ -797,6 +798,116 @@ export async function runSuite(
         'expected exactly the mapped audio stream'
       )
       return `4 streams muxed, remuxed with -c copy, track extracted`
+    })
+  )
+
+  record(
+    await run('Embeds soft subtitle tracks with metadata', async () => {
+      // MKV carries SRT and ASS side by side; the player toggles them and the
+      // video is never re-encoded.
+      const softMkv = new File(directory, 'soft-subs.mkv')
+      const result = await execute([
+        '-y',
+        '-hide_banner',
+        '-i',
+        muxed.uri,
+        '-i',
+        srt.uri,
+        '-i',
+        ass.uri,
+        '-map',
+        '0:v:0',
+        '-map',
+        '0:a:0',
+        '-map',
+        '1:0',
+        '-map',
+        '2:0',
+        '-c:v',
+        'copy',
+        '-c:a',
+        'copy',
+        '-c:s:0',
+        'srt',
+        '-c:s:1',
+        'ass',
+        '-metadata:s:s:0',
+        'language=eng',
+        '-metadata:s:s:0',
+        'title=English',
+        '-metadata:s:s:1',
+        'language=urd',
+        '-metadata:s:s:1',
+        'title=Urdu',
+        softMkv.uri,
+      ])
+      assert(result.success, result.failStackTrace ?? result.output)
+
+      const information = (await getMediaInformation(
+        softMkv.uri
+      )) as MediaInformation
+      const subtitles = (information.streams ?? []).filter(
+        (stream) => stream.codec_type === 'subtitle'
+      )
+      assert(
+        subtitles.length === 2,
+        `expected 2 subtitle streams, got ${subtitles.length}`
+      )
+      const codecs = subtitles.map((stream) => stream.codec_name)
+      assert(
+        codecs.includes('subrip'),
+        `no subrip track in ${codecs.join(', ')}`
+      )
+      assert(codecs.includes('ass'), `no ass track in ${codecs.join(', ')}`)
+      const languages = subtitles.map((stream) => stream.tags?.language)
+      assert(
+        languages.includes('eng') && languages.includes('urd'),
+        `language tags did not round-trip: ${languages.join(', ')}`
+      )
+      const titles = subtitles.map((stream) => stream.tags?.title)
+      assert(
+        titles.includes('English') && titles.includes('Urdu'),
+        `title tags did not round-trip: ${titles.join(', ')}`
+      )
+
+      // MP4 wants its own subtitle codec: mov_text.
+      const softMp4 = new File(directory, 'soft-subs.mp4')
+      const mp4Result = await execute([
+        '-y',
+        '-hide_banner',
+        '-i',
+        muxed.uri,
+        '-i',
+        srt.uri,
+        '-map',
+        '0:v:0',
+        '-map',
+        '0:a:0',
+        '-map',
+        '1:0',
+        '-c:v',
+        'copy',
+        '-c:a',
+        'copy',
+        '-c:s',
+        'mov_text',
+        '-metadata:s:s:0',
+        'language=eng',
+        softMp4.uri,
+      ])
+      assert(mp4Result.success, mp4Result.failStackTrace ?? mp4Result.output)
+
+      const mp4Information = (await getMediaInformation(
+        softMp4.uri
+      )) as MediaInformation
+      const movText = (mp4Information.streams ?? []).find(
+        (stream) => stream.codec_type === 'subtitle'
+      )
+      assert(
+        movText?.codec_name === 'mov_text',
+        `expected mov_text, got ${movText?.codec_name}`
+      )
+      return 'MKV: subrip + ass with language and title tags; MP4: mov_text'
     })
   )
 
