@@ -111,8 +111,17 @@ static void install_log_handler(void)
     static int installed;
     if (installed) return;
     av_log_set_callback(on_av_log);
-    av_log_set_level(AV_LOG_INFO);
     installed = 1;
+}
+
+/*
+ * fftools' -v/-loglevel writes the global libav log level and never restores
+ * it, so one `-v error` probe would silence every later run's logs and
+ * statistics. Each execution therefore starts from the default again.
+ */
+static void reset_log_level(void)
+{
+    av_log_set_level(AV_LOG_INFO);
 }
 
 /*
@@ -172,6 +181,7 @@ int munim_ffmpeg_execute(int argc, const char *const *argv,
         ret = MUNIM_FFMPEG_CANCELLED;
     } else {
         munim_ffmpeg_hook_reset();
+        reset_log_level();
         int saved = redirect_stdout(stdout_path);
         ret = ffmpeg_main(argc + 1, arguments);
         restore_stdout(saved);
@@ -203,6 +213,7 @@ int munim_ffmpeg_probe(int argc, const char *const *argv,
         ret = MUNIM_FFMPEG_CANCELLED;
     } else {
         munim_ffprobe_hook_reset();
+        reset_log_level();
         ret = ffprobe_main(total, arguments);
     }
     pthread_mutex_unlock(&execution_lock);
