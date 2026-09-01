@@ -84,9 +84,9 @@ export function getFFmpegVersion(): string {
   return MunimFfmpeg.ffmpegVersion
 }
 
-// The bundled FFmpeg builds differ per platform: Android ships libx264/libx265,
-// iOS ships the VideoToolbox hardware encoders instead. Asking the binary what
-// it supports is more reliable than hard-coding a per-platform table.
+// The bundled FFmpeg builds differ per platform: Android ships the MediaCodec
+// hardware encoders, iOS ships VideoToolbox. Asking the binary what it
+// supports is more reliable than hard-coding a per-platform table.
 const codecCache = new Map<string, Promise<string[]>>()
 
 function listCodecs(flag: '-encoders' | '-decoders'): Promise<string[]> {

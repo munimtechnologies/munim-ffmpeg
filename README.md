@@ -132,8 +132,8 @@
 | Expo Go                      | ❌              | ❌              | A native development build is required.                                                                                                                 |
 | Capability discovery         | ✅              | ✅              | `listEncoders()`, `listDecoders()`, `listMuxers()`, `listDemuxers()`, `listFilters()`, `listProtocols()`, and `pickEncoder()` report what the bundled build supports. |
 | Subtitle burn-in             | ✅              | ✅              | libass with system fonts: Core Text on iOS, fontconfig over `/system/fonts` on Android.                                                                  |
-| H.264 encoding               | VideoToolbox    | libx264         | The builds differ; use `pickEncoder(['libx264', 'h264_videotoolbox'])` instead of hard-coding an encoder.                                                |
-| Remote HTTP(S) inputs        | ✅              | ✅              | Both builds link GnuTLS. Remote server behaviour still varies; prefer local files for predictable app workflows.                                         |
+| H.264 encoding               | VideoToolbox    | MediaCodec      | Hardware on both, `libopenh264` as the software fallback; use `pickEncoder(['h264_videotoolbox', 'h264_mediacodec', 'libopenh264'])` instead of hard-coding an encoder. |
+| Remote HTTP(S) inputs        | ✅              | ✅              | iOS links SecureTransport, Android links mbedTLS. Remote server behaviour still varies; prefer local files for predictable app workflows.                 |
 
 Codec availability is determined by the native FFmpeg builds described in [Bundled FFmpeg builds](#bundled-ffmpeg-builds). Do not assume every FFmpeg codec or external library is present.
 
@@ -567,11 +567,12 @@ if (!result.success) {
 ```typescript
 import { execute, pickEncoder } from 'munim-ffmpeg'
 
-const encoder = await pickEncoder(['libx264', 'h264_videotoolbox'])
+const encoder = await pickEncoder(['h264_videotoolbox', 'h264_mediacodec', 'libopenh264'])
 if (!encoder) throw new Error('No H.264 encoder available in this build')
 
-// -preset is an x264 option; VideoToolbox rejects it.
-const quality = encoder === 'libx264' ? ['-preset', 'veryfast', '-crf', '23'] : ['-b:v', '2M']
+// MediaCodec wants NV12 input; the others take planar YUV.
+const pixelFormat = encoder === 'h264_mediacodec' ? 'nv12' : 'yuv420p'
+const quality = ['-b:v', '2M', '-pix_fmt', pixelFormat]
 
 const result = await execute([
   '-y',
@@ -741,7 +742,7 @@ Rebuild the native app after installing both `munim-ffmpeg` and `react-native-ni
 
 ### A codec or filter is missing
 
-Native FFmpeg variants do not bundle every codec, filter, or third-party library, and the iOS and Android builds are not identical. Call `listEncoders()` or `listDecoders()` to see what the running build actually has, and prefer `pickEncoder()` over a hard-coded name. `libx264` in particular exists only on Android — see [Bundled FFmpeg builds](#bundled-ffmpeg-builds).
+Native FFmpeg variants do not bundle every codec, filter, or third-party library, and the iOS and Android builds are not identical. Call `listEncoders()`, `listDecoders()`, `listMuxers()`, `listDemuxers()`, `listFilters()`, or `listProtocols()` to see what the running build actually has, and prefer `pickEncoder()` over a hard-coded name. There is no `libx264` in these LGPL builds — H.264 comes from the platform's hardware encoder or `libopenh264` — see [Bundled FFmpeg builds](#bundled-ffmpeg-builds).
 
 ### The Promise resolved but the command failed
 
