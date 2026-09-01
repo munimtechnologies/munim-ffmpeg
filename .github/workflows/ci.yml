@@ -1,0 +1,25 @@
+# The native binaries build on a Mac with the NDK and Xcode and take ~40
+# minutes, so CI only guards the JavaScript surface: types, lint, the compiled
+# lib, and that the published package stays well-formed.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm run typecheck:example
+      - run: npm run lint
+      - run: npm pack --dry-run
