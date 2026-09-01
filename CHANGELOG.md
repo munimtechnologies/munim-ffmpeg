@@ -1,3 +1,18 @@
+## [0.5.0](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.4.2...v0.5.0) (2026-09-01)
+
+### ✨ Features
+
+* render subtitles with libass and list muxers, demuxers, filters, and protocols ([b615d90](https://github.com/munimtechnologies/munim-ffmpeg/commit/b615d901a5d2d674fc840004ddd7baa09cb38c63))
+
+### 🐛 Bug Fixes
+
+* reset the global log level before every run ([0d1724a](https://github.com/munimtechnologies/munim-ffmpeg/commit/0d1724a42d1a4c667f377c240cb12d711ad430e5))
+
+### 🛠️ Other changes
+
+* **deps:** force transitive uuid past GHSA-w5hq-g745-h8pq ([697c535](https://github.com/munimtechnologies/munim-ffmpeg/commit/697c5353a740c84fe61ba6862271d7b5c118e20e))
+* sync package-lock with the release ([e87d87b](https://github.com/munimtechnologies/munim-ffmpeg/commit/e87d87b831355490f58495ed2b25ff4dd46eef75))
+
 ## [0.4.2](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.4.1...v0.4.2) (2026-08-29)
 
 ### 📚 Documentation
