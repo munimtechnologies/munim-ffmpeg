@@ -6,7 +6,11 @@ import {
   getFFmpegVersion,
   getMediaInformation,
   listDecoders,
+  listDemuxers,
   listEncoders,
+  listFilters,
+  listMuxers,
+  listProtocols,
   normalizePath,
   pickEncoder,
   probe,
@@ -592,6 +596,207 @@ export async function runSuite(
       assert(codecs.includes('vp9'), `expected vp9, got ${codecs.join(', ')}`)
       assert(codecs.includes('opus'), `expected opus, got ${codecs.join(', ')}`)
       return `${webm.size} bytes, ${codecs.join(' + ')}`
+    })
+  )
+
+  record(
+    await run('Lists muxers, demuxers, filters, and protocols', async () => {
+      const [muxers, demuxers, filters, protocols] = await Promise.all([
+        listMuxers(),
+        listDemuxers(),
+        listFilters(),
+        listProtocols(),
+      ])
+      assert(muxers.includes('matroska'), 'matroska muxer missing')
+      assert(muxers.includes('mp4'), 'mp4 muxer missing')
+      assert(demuxers.includes('matroska'), 'matroska demuxer missing')
+      assert(filters.includes('subtitles'), 'subtitles filter missing')
+      assert(filters.includes('ass'), 'ass filter missing')
+      assert(filters.includes('drawtext'), 'drawtext filter missing')
+      assert(protocols.includes('https'), 'https protocol missing')
+      return `${muxers.length} muxers, ${demuxers.length} demuxers, ${filters.length} filters, ${protocols.length} protocols`
+    })
+  )
+
+  // Subtitle rendering is verified by measuring luma: the source frames are
+  // pure black (Y = 16 in limited range), so any brighter average proves text
+  // was actually rasterised, not merely that the filter graph ran.
+  const black = new File(directory, 'black.rgb')
+  black.create({ overwrite: true })
+  black.write(new Uint8Array(RAW_WIDTH * RAW_HEIGHT * 3 * RAW_FRAMES))
+
+  async function burnAndMeasure(filterGraph: string): Promise<number> {
+    const logs: string[] = []
+    const result = await execute(
+      [
+        '-y',
+        '-hide_banner',
+        ...rawVideoInput(black.uri),
+        '-vf',
+        `${filterGraph},signalstats,metadata=mode=print:key=lavfi.signalstats.YAVG`,
+        '-f',
+        'null',
+        '-',
+      ],
+      (message) => logs.push(message)
+    )
+    assert(result.success, result.failStackTrace ?? result.output)
+
+    const values = `${logs.join('')}${result.output}`
+      .split('\n')
+      .map((line) => /YAVG=([0-9.]+)/.exec(line)?.[1])
+      .filter((value): value is string => value !== undefined)
+      .map(Number)
+    assert(
+      values.length > 0,
+      `signalstats reported no luma values; returnCode=${result.returnCode} logs=${logs.length} output=${result.output.length} tail: ${`${logs.join('')}${result.output}`.slice(-600)}`
+    )
+    return Math.max(...values)
+  }
+
+  const ass = new File(directory, 'styled.ass')
+  ass.create({ overwrite: true })
+  ass.write(
+    [
+      '[Script Info]',
+      'ScriptType: v4.00+',
+      `PlayResX: ${RAW_WIDTH}`,
+      `PlayResY: ${RAW_HEIGHT}`,
+      '',
+      '[V4+ Styles]',
+      'Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Italic, Alignment, MarginL, MarginR, MarginV, Outline, Shadow',
+      'Style: Big,Arial,48,&H00FFFFFF,&H00000000,&H00000000,1,0,5,10,10,10,2,1',
+      '',
+      '[Events]',
+      'Format: Layer, Start, End, Style, Text',
+      `Dialogue: 0,0:00:00.00,0:00:09.00,Big,{\\an5}HELLO مرحبا`,
+    ].join('\n')
+  )
+
+  record(
+    await run('Burns styled ASS subtitles with libass', async () => {
+      const luma = await burnAndMeasure(
+        `ass=filename=${normalizePath(ass.uri)}`
+      )
+      assert(
+        luma > 18,
+        `frames stayed black (max YAVG ${luma}); libass rendered nothing`
+      )
+      return `Arabic + Latin text rendered, max YAVG ${luma.toFixed(1)}`
+    })
+  )
+
+  const srt = new File(directory, 'plain.srt')
+  srt.create({ overwrite: true })
+  srt.write('1\n00:00:00,000 --> 00:00:09,000\nSUBTITLE TEST\n')
+
+  record(
+    await run('Burns SRT subtitles with force_style', async () => {
+      const luma = await burnAndMeasure(
+        `subtitles=filename=${normalizePath(srt.uri)}:force_style='Fontsize=64,Outline=2,Alignment=10'`
+      )
+      assert(
+        luma > 18,
+        `frames stayed black (max YAVG ${luma}); no subtitle rendered`
+      )
+      return `styled SRT rendered, max YAVG ${luma.toFixed(1)}`
+    })
+  )
+
+  record(
+    await run('Muxes a multi-track MKV and maps streams', async () => {
+      const mkv = new File(directory, 'multitrack.mkv')
+      const result = await execute([
+        '-y',
+        '-hide_banner',
+        '-i',
+        muxed.uri,
+        '-i',
+        source.uri,
+        '-i',
+        srt.uri,
+        '-map',
+        '0:v:0',
+        '-map',
+        '0:a:0',
+        '-map',
+        '1:a:0',
+        '-map',
+        '2:s:0',
+        '-c:v',
+        'copy',
+        '-c:a',
+        'aac',
+        '-c:s',
+        'srt',
+        '-metadata:s:a:1',
+        'language=urd',
+        mkv.uri,
+      ])
+      assert(result.success, result.failStackTrace ?? result.output)
+
+      const information = (await getMediaInformation(
+        mkv.uri
+      )) as MediaInformation
+      const kinds = (information.streams ?? []).map((s) => s.codec_type)
+      assert(
+        /matroska/.test(information.format?.format_name ?? ''),
+        `expected matroska, got ${information.format?.format_name}`
+      )
+      assert(
+        kinds.filter((k) => k === 'audio').length === 2,
+        `expected 2 audio streams, got ${kinds.join(', ')}`
+      )
+      assert(kinds.includes('subtitle'), 'subtitle stream missing from MKV')
+
+      // Remux everything with stream copy, then pull out just the second
+      // audio track — the workflows issue #2 asked to support.
+      const remuxed = new File(directory, 'remuxed.mkv')
+      const copyResult = await execute([
+        '-y',
+        '-hide_banner',
+        '-i',
+        mkv.uri,
+        '-map',
+        '0',
+        '-c',
+        'copy',
+        remuxed.uri,
+      ])
+      assert(copyResult.success, copyResult.failStackTrace ?? copyResult.output)
+      const remuxedInfo = (await getMediaInformation(
+        remuxed.uri
+      )) as MediaInformation
+      assert(
+        (remuxedInfo.streams ?? []).length === 4,
+        `remux kept ${(remuxedInfo.streams ?? []).length} of 4 streams`
+      )
+
+      const track = new File(directory, 'second-audio.m4a')
+      const extractResult = await execute([
+        '-y',
+        '-hide_banner',
+        '-i',
+        remuxed.uri,
+        '-map',
+        '0:a:1',
+        '-c',
+        'copy',
+        track.uri,
+      ])
+      assert(
+        extractResult.success,
+        extractResult.failStackTrace ?? extractResult.output
+      )
+      const trackInfo = (await getMediaInformation(
+        track.uri
+      )) as MediaInformation
+      assert(
+        trackInfo.streams?.length === 1 &&
+          trackInfo.streams[0]?.codec_type === 'audio',
+        'expected exactly the mapped audio stream'
+      )
+      return `4 streams muxed, remuxed with -c copy, track extracted`
     })
   )
 

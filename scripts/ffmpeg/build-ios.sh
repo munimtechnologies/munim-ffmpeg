@@ -158,6 +158,96 @@ EOF
   ) > "$WORKSPACE/build/openh264-$SLICE.log" 2>&1
 fi
 
+# FreeType's freetype2.pc declares `Requires.private: zlib`, and the iOS SDK
+# ships zlib without a .pc file, so pkg-config would otherwise refuse every
+# package that depends on FreeType.
+mkdir -p "$PREFIX/lib/pkgconfig"
+if [ ! -f "$PREFIX/lib/pkgconfig/zlib.pc" ]; then
+  cat > "$PREFIX/lib/pkgconfig/zlib.pc" <<'ZLIBPC'
+Name: zlib
+Description: zlib from the platform sysroot
+Version: 1.3
+Libs: -lz
+ZLIBPC
+fi
+
+# The subtitle stack (issue #1): FreeType, FriBidi and HarfBuzz shape and
+# rasterise text, libass renders ASS/SSA. On iOS libass finds system fonts
+# through Core Text, so no fontconfig is needed.
+if [ ! -f "$PREFIX/lib/libfreetype.a" ]; then
+  echo "  FreeType"
+  fetch "https://download.savannah.gnu.org/releases/freetype/freetype-2.13.3.tar.xz" freetype-2.13.3.tar.xz
+  unpack freetype-2.13.3.tar.xz "freetype-$SLICE"
+  (
+    cd "$DEPS/freetype-$SLICE"
+    PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig" \
+    ./configure --host="$HOST" --prefix="$PREFIX" --disable-shared --enable-static \
+      --with-zlib=yes --without-png --without-harfbuzz --without-brotli --without-bzip2
+    make -j"$JOBS" && make install
+  ) > "$WORKSPACE/build/freetype-$SLICE.log" 2>&1
+fi
+
+if [ ! -f "$PREFIX/lib/libfribidi.a" ]; then
+  echo "  FriBidi"
+  fetch "https://github.com/fribidi/fribidi/releases/download/v1.0.16/fribidi-1.0.16.tar.xz" fribidi-1.0.16.tar.xz
+  unpack fribidi-1.0.16.tar.xz "fribidi-$SLICE"
+  (
+    cd "$DEPS/fribidi-$SLICE"
+    ./configure --host="$HOST" --prefix="$PREFIX" --disable-shared --enable-static \
+      --disable-debug
+    make -j"$JOBS" && make install
+  ) > "$WORKSPACE/build/fribidi-$SLICE.log" 2>&1
+fi
+
+if [ ! -f "$PREFIX/lib/libharfbuzz.a" ]; then
+  echo "  HarfBuzz"
+  fetch "https://github.com/harfbuzz/harfbuzz/releases/download/10.1.0/harfbuzz-10.1.0.tar.xz" harfbuzz-10.1.0.tar.xz
+  unpack harfbuzz-10.1.0.tar.xz "harfbuzz-$SLICE"
+  (
+    cd "$DEPS/harfbuzz-$SLICE"
+    [ "$ARCH" = "arm64" ] && MESON_CPU_FAMILY=aarch64 || MESON_CPU_FAMILY=x86_64
+    cat > cross-harfbuzz.txt <<EOF
+[binaries]
+pkg-config = '$(command -v pkg-config)'
+c = '$CC'
+cpp = '$CXX'
+ar = '$AR'
+strip = '$STRIP'
+[built-in options]
+c_args = ['-arch', '$ARCH', '-isysroot', '$SDK', '$MIN_FLAG']
+cpp_args = ['-arch', '$ARCH', '-isysroot', '$SDK', '$MIN_FLAG']
+c_link_args = ['-arch', '$ARCH', '-isysroot', '$SDK', '$MIN_FLAG']
+cpp_link_args = ['-arch', '$ARCH', '-isysroot', '$SDK', '$MIN_FLAG']
+pkg_config_path = '$PREFIX/lib/pkgconfig'
+[host_machine]
+system = 'darwin'
+subsystem = '$MESON_SUBSYSTEM'
+cpu_family = '$MESON_CPU_FAMILY'
+cpu = '$MESON_CPU_FAMILY'
+endian = 'little'
+EOF
+    meson setup build --cross-file cross-harfbuzz.txt --prefix="$PREFIX" \
+      --default-library=static --buildtype=release \
+      -Dfreetype=enabled -Dglib=disabled -Dgobject=disabled -Dcairo=disabled \
+      -Dicu=disabled -Dtests=disabled -Ddocs=disabled -Dbenchmark=disabled \
+      -Dintrospection=disabled -Dutilities=disabled -Dcoretext=disabled
+    ninja -C build && ninja -C build install
+  ) > "$WORKSPACE/build/harfbuzz-$SLICE.log" 2>&1
+fi
+
+if [ ! -f "$PREFIX/lib/libass.a" ]; then
+  echo "  libass"
+  fetch "https://github.com/libass/libass/releases/download/0.17.4/libass-0.17.4.tar.xz" libass-0.17.4.tar.xz
+  unpack libass-0.17.4.tar.xz "libass-$SLICE"
+  (
+    cd "$DEPS/libass-$SLICE"
+    PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig" \
+    ./configure --host="$HOST" --prefix="$PREFIX" --disable-shared --enable-static \
+      --disable-fontconfig
+    make -j"$JOBS" && make install
+  ) > "$WORKSPACE/build/libass-$SLICE.log" 2>&1
+fi
+
 echo "==> FFmpeg for $SLICE"
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig"
 rm -rf "$BUILD"; mkdir -p "$BUILD"; cd "$BUILD"
@@ -180,6 +270,7 @@ rm -rf "$BUILD"; mkdir -p "$BUILD"; cd "$BUILD"
   --enable-videotoolbox --enable-audiotoolbox --enable-securetransport \
   --enable-zlib --enable-libmp3lame --enable-libopus --enable-libvpx \
   --enable-libdav1d --enable-libopenh264 \
+  --enable-libass --enable-libfreetype --enable-libfribidi --enable-libharfbuzz \
   --enable-pthreads --enable-swscale --enable-avfilter --enable-network \
   --enable-protocol=file,pipe,http,tcp,https,tls,crypto,data,concat,concatf \
   --disable-programs --disable-doc --disable-debug --disable-vulkan \

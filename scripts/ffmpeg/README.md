@@ -34,7 +34,8 @@ defaults with `ANDROID_NDK`, `FFMPEG_VERSION`, `FFMPEG_WORKSPACE`, `MIN_IOS`.
 | Architectures | arm64 device, arm64 + x86_64 simulator | arm64-v8a, armeabi-v7a, x86_64 |
 | Hardware codecs | VideoToolbox, AudioToolbox | MediaCodec |
 | TLS | SecureTransport | mbedTLS |
-| External libraries | LAME, Opus, libvpx, dav1d, openh264 | LAME, Opus, libvpx, dav1d, openh264, mbedTLS |
+| External libraries | LAME, Opus, libvpx, dav1d, openh264, FreeType, FriBidi, HarfBuzz, libass | LAME, Opus, libvpx, dav1d, openh264, mbedTLS, FreeType, FriBidi, HarfBuzz, expat, fontconfig, libass |
+| Subtitle fonts | Core Text | fontconfig over `/system/fonts` (fonts.conf written at runtime) |
 
 No x264, x265, xvid or vid.stab: the package stays LGPL. H.264 and HEVC come
 from the platform's hardware encoder, with openh264 (BSD) as a software H.264

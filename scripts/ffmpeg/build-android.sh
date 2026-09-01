@@ -172,6 +172,150 @@ EOF
   ) > "$WORKSPACE/build/openh264-$ABI.log" 2>&1
 fi
 
+# FreeType's freetype2.pc declares `Requires.private: zlib`, and the NDK ships
+# zlib in the sysroot without a .pc file, so pkg-config would otherwise refuse
+# every package that depends on FreeType.
+mkdir -p "$PREFIX/lib/pkgconfig"
+if [ ! -f "$PREFIX/lib/pkgconfig/zlib.pc" ]; then
+  cat > "$PREFIX/lib/pkgconfig/zlib.pc" <<'ZLIBPC'
+Name: zlib
+Description: zlib from the platform sysroot
+Version: 1.3
+Libs: -lz
+ZLIBPC
+fi
+
+# The subtitle stack (issue #1): FreeType, FriBidi and HarfBuzz shape and
+# rasterise text, libass renders ASS/SSA, and fontconfig + expat let libass
+# discover the system fonts under /system/fonts.
+if [ ! -f "$PREFIX/lib/libfreetype.a" ]; then
+  echo "  FreeType"
+  fetch "https://download.savannah.gnu.org/releases/freetype/freetype-2.13.3.tar.xz" freetype-2.13.3.tar.xz
+  unpack freetype-2.13.3.tar.xz "freetype-$ABI"
+  (
+    cd "$DEPS/freetype-$ABI"
+    PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig" \
+    ./configure --host="$HOST" --prefix="$PREFIX" --disable-shared --enable-static \
+      --with-zlib=yes --without-png --without-harfbuzz --without-brotli --without-bzip2
+    make -j"$JOBS" && make install
+  ) > "$WORKSPACE/build/freetype-$ABI.log" 2>&1
+fi
+
+if [ ! -f "$PREFIX/lib/libfribidi.a" ]; then
+  echo "  FriBidi"
+  fetch "https://github.com/fribidi/fribidi/releases/download/v1.0.16/fribidi-1.0.16.tar.xz" fribidi-1.0.16.tar.xz
+  unpack fribidi-1.0.16.tar.xz "fribidi-$ABI"
+  (
+    cd "$DEPS/fribidi-$ABI"
+    ./configure --host="$HOST" --prefix="$PREFIX" --disable-shared --enable-static \
+      --disable-debug
+    make -j"$JOBS" && make install
+  ) > "$WORKSPACE/build/fribidi-$ABI.log" 2>&1
+fi
+
+if [ ! -f "$PREFIX/lib/libharfbuzz.a" ]; then
+  echo "  HarfBuzz"
+  fetch "https://github.com/harfbuzz/harfbuzz/releases/download/10.1.0/harfbuzz-10.1.0.tar.xz" harfbuzz-10.1.0.tar.xz
+  unpack harfbuzz-10.1.0.tar.xz "harfbuzz-$ABI"
+  (
+    cd "$DEPS/harfbuzz-$ABI"
+    case "$ABI" in
+      arm64-v8a)   MESON_CPU_FAMILY=aarch64; MESON_CPU=aarch64 ;;
+      armeabi-v7a) MESON_CPU_FAMILY=arm;     MESON_CPU=armv7 ;;
+      x86_64)      MESON_CPU_FAMILY=x86_64;  MESON_CPU=x86_64 ;;
+    esac
+    cat > cross-harfbuzz.txt <<EOF
+[binaries]
+pkg-config = '$(command -v pkg-config)'
+c = '$CC'
+cpp = '$CXX'
+ar = '$AR'
+strip = '$STRIP'
+[built-in options]
+c_args = [$(printf "'%s', " $CFLAGS | sed 's/, $//')]
+cpp_args = [$(printf "'%s', " $CFLAGS | sed 's/, $//')]
+pkg_config_path = '$PREFIX/lib/pkgconfig'
+[host_machine]
+system = 'android'
+cpu_family = '$MESON_CPU_FAMILY'
+cpu = '$MESON_CPU'
+endian = 'little'
+EOF
+    meson setup build --cross-file cross-harfbuzz.txt --prefix="$PREFIX" \
+      --default-library=static --buildtype=release \
+      -Dfreetype=enabled -Dglib=disabled -Dgobject=disabled -Dcairo=disabled \
+      -Dicu=disabled -Dtests=disabled -Ddocs=disabled -Dbenchmark=disabled \
+      -Dintrospection=disabled -Dutilities=disabled
+    ninja -C build && ninja -C build install
+  ) > "$WORKSPACE/build/harfbuzz-$ABI.log" 2>&1
+fi
+
+if [ ! -f "$PREFIX/lib/libexpat.a" ]; then
+  echo "  expat"
+  fetch "https://github.com/libexpat/libexpat/releases/download/R_2_7_1/expat-2.7.1.tar.xz" expat-2.7.1.tar.xz
+  unpack expat-2.7.1.tar.xz "expat-$ABI"
+  (
+    cd "$DEPS/expat-$ABI"
+    cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
+      -DANDROID_ABI="$ABI" -DANDROID_PLATFORM="android-$API" \
+      -DCMAKE_INSTALL_PREFIX="$PREFIX" -DCMAKE_BUILD_TYPE=Release \
+      -DEXPAT_SHARED_LIBS=OFF -DEXPAT_BUILD_TOOLS=OFF -DEXPAT_BUILD_EXAMPLES=OFF \
+      -DEXPAT_BUILD_TESTS=OFF -DEXPAT_BUILD_DOCS=OFF
+    cmake --build build -j"$JOBS" && cmake --install build
+  ) > "$WORKSPACE/build/expat-$ABI.log" 2>&1
+fi
+
+if [ ! -f "$PREFIX/lib/libfontconfig.a" ]; then
+  echo "  fontconfig"
+  fetch "https://www.freedesktop.org/software/fontconfig/release/fontconfig-2.16.0.tar.xz" fontconfig-2.16.0.tar.xz
+  unpack fontconfig-2.16.0.tar.xz "fontconfig-$ABI"
+  (
+    cd "$DEPS/fontconfig-$ABI"
+    case "$ABI" in
+      arm64-v8a)   MESON_CPU_FAMILY=aarch64; MESON_CPU=aarch64 ;;
+      armeabi-v7a) MESON_CPU_FAMILY=arm;     MESON_CPU=armv7 ;;
+      x86_64)      MESON_CPU_FAMILY=x86_64;  MESON_CPU=x86_64 ;;
+    esac
+    cat > cross-fontconfig.txt <<EOF
+[binaries]
+pkg-config = '$(command -v pkg-config)'
+c = '$CC'
+cpp = '$CXX'
+ar = '$AR'
+strip = '$STRIP'
+[built-in options]
+c_args = [$(printf "'%s', " $CFLAGS | sed 's/, $//')]
+pkg_config_path = '$PREFIX/lib/pkgconfig'
+[host_machine]
+system = 'android'
+cpu_family = '$MESON_CPU_FAMILY'
+cpu = '$MESON_CPU'
+endian = 'little'
+EOF
+    # The Kotlin layer writes the real fonts.conf at runtime and points
+    # FONTCONFIG_FILE at it; the baked-in default is only a fallback.
+    meson setup build --cross-file cross-fontconfig.txt --prefix="$PREFIX" \
+      --default-library=static --buildtype=release \
+      -Ddoc=disabled -Dnls=disabled -Dtests=disabled -Dtools=disabled \
+      -Dcache-build=disabled -Diconv=disabled \
+      -Ddefault-fonts-dirs=/system/fonts
+    ninja -C build && ninja -C build install
+  ) > "$WORKSPACE/build/fontconfig-$ABI.log" 2>&1
+fi
+
+if [ ! -f "$PREFIX/lib/libass.a" ]; then
+  echo "  libass"
+  fetch "https://github.com/libass/libass/releases/download/0.17.4/libass-0.17.4.tar.xz" libass-0.17.4.tar.xz
+  unpack libass-0.17.4.tar.xz "libass-$ABI"
+  (
+    cd "$DEPS/libass-$ABI"
+    PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig" \
+    ./configure --host="$HOST" --prefix="$PREFIX" --disable-shared --enable-static \
+      --enable-fontconfig
+    make -j"$JOBS" && make install
+  ) > "$WORKSPACE/build/libass-$ABI.log" 2>&1
+fi
+
 if [ ! -f "$PREFIX/lib/libmbedtls.a" ]; then
   echo "  mbedTLS"
   fetch "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.2/mbedtls-3.6.2.tar.bz2" mbedtls-3.6.2.tar.bz2
@@ -209,6 +353,8 @@ rm -rf "$BUILD"; mkdir -p "$BUILD"; cd "$BUILD"
   --enable-jni --enable-mediacodec \
   --enable-zlib --enable-libmp3lame --enable-libopus --enable-libvpx \
   --enable-libdav1d --enable-libopenh264 --enable-mbedtls --enable-version3 \
+  --enable-libass --enable-libfreetype --enable-libfribidi --enable-libharfbuzz \
+  --enable-libfontconfig \
   --enable-pthreads --enable-swscale --enable-avfilter --enable-network \
   --enable-protocol=file,pipe,http,tcp,https,tls,crypto,data,concat,concatf \
   --disable-programs --disable-doc --disable-debug --disable-vulkan \

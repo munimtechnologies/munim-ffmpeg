@@ -112,7 +112,8 @@
 - 📱 **iOS and Android:** Native implementations in Swift and Kotlin
 - 🧬 **Nitro Modules:** Generated high-performance native bindings
 - 🚀 **Expo compatible:** Autolinking, config plugin, and an Expo development example
-- 🧪 **Capability discovery:** Ask the bundled build which encoders and decoders it actually has
+- 🧪 **Capability discovery:** Ask the bundled build which encoders, decoders, muxers, demuxers, filters, and protocols it actually has
+- 💬 **Subtitle burn-in:** libass renders ASS/SSA and SRT subtitles — styling, positioning, outlines, shadows, and proper Arabic/Urdu shaping via HarfBuzz and FriBidi
 - 🎯 **TypeScript:** Complete public callback and result types
 - 🗂️ **16 KB Android pages:** Built with the alignment Google Play requires
 
@@ -129,7 +130,8 @@
 | Cancel one FFmpeg session    | ✅              | ✅              | Pass the positive safe-integer ID received by `execute`'s `onSessionCreated`. The native dependency does not expose FFprobe cancellation.               |
 | Cancel all FFmpeg sessions   | ✅              | ✅              | Use `cancelAll()` or call `cancel()` without an ID.                                                                                                     |
 | Expo Go                      | ❌              | ❌              | A native development build is required.                                                                                                                 |
-| Capability discovery         | ✅              | ✅              | `listEncoders()`, `listDecoders()`, and `pickEncoder()` report what the bundled build supports.                                                          |
+| Capability discovery         | ✅              | ✅              | `listEncoders()`, `listDecoders()`, `listMuxers()`, `listDemuxers()`, `listFilters()`, `listProtocols()`, and `pickEncoder()` report what the bundled build supports. |
+| Subtitle burn-in             | ✅              | ✅              | libass with system fonts: Core Text on iOS, fontconfig over `/system/fonts` on Android.                                                                  |
 | H.264 encoding               | VideoToolbox    | libx264         | The builds differ; use `pickEncoder(['libx264', 'h264_videotoolbox'])` instead of hard-coding an encoder.                                                |
 | Remote HTTP(S) inputs        | ✅              | ✅              | Both builds link GnuTLS. Remote server behaviour still varies; prefer local files for predictable app workflows.                                         |
 
@@ -177,13 +179,13 @@ Both platforms run **FFmpeg 9.0.1**, built from [ffmpeg.org](https://www.ffmpeg.
 | TLS | SecureTransport | mbedTLS |
 | Minimum | iOS 15.1 | API 24, 16 KB pages |
 
-Linked libraries, identical on both: **LAME** (MP3), **Opus**, **libvpx** (VP8/VP9), **dav1d** (AV1 decoding), **openh264** (software H.264), plus everything FFmpeg builds natively.
+Linked libraries, identical on both: **LAME** (MP3), **Opus**, **libvpx** (VP8/VP9), **dav1d** (AV1 decoding), **openh264** (software H.264), **libass** with **FreeType**, **HarfBuzz**, and **FriBidi** (subtitle rendering and text shaping), plus everything FFmpeg builds natively. Android additionally links **fontconfig** and **expat** so libass can discover the system fonts; iOS uses Core Text for the same job.
 
 FFmpeg's own `ffmpeg` and `ffprobe` tools are compiled to run inside your app process, so the argument arrays you pass are handled by the real command-line code paths rather than a reimplementation.
 
 ### Encoders
 
-Verified by running the example's device suite: iOS reports 186 encoders, Android 184. Everything FFmpeg builds natively (`aac`, `alac`, `flac`, `mpeg4`, `mjpeg`, `png`, `gif`, `pcm_*`, …) is on both, as are `libmp3lame`, `libopus`, `libvpx`, and `libvpx-vp9`.
+Verified by running the example's device suite: iOS reports 187 encoders, Android 185. Everything FFmpeg builds natively (`aac`, `alac`, `flac`, `mpeg4`, `mjpeg`, `png`, `gif`, `pcm_*`, …) is on both, as are `libmp3lame`, `libopus`, `libvpx`, and `libvpx-vp9`.
 
 H.264 and HEVC come from the platform's hardware encoder, which is faster and uses less power than a software encoder. `libopenh264` is there as a software H.264 fallback for anywhere hardware encoding is unavailable — an emulator, for instance:
 
@@ -463,6 +465,31 @@ Returns the decoder names the bundled FFmpeg build can read.
 function listDecoders(): Promise<string[]>
 ```
 
+### `listMuxers()` / `listDemuxers()`
+
+Return the container formats the bundled FFmpeg build can write and read, e.g. `mp4`, `matroska`, `webm`. Cached after the first call.
+
+```typescript
+function listMuxers(): Promise<string[]>
+function listDemuxers(): Promise<string[]>
+```
+
+### `listFilters()`
+
+Returns the filter names the bundled FFmpeg build provides, e.g. `subtitles`, `ass`, `drawtext`, `scale`.
+
+```typescript
+function listFilters(): Promise<string[]>
+```
+
+### `listProtocols()`
+
+Returns the protocol names the bundled FFmpeg build provides, e.g. `file`, `https`, `concat`.
+
+```typescript
+function listProtocols(): Promise<string[]>
+```
+
 ### `pickEncoder(candidates)`
 
 Returns the first name in `candidates` that the build provides, or `undefined` when none are available. Use it to write one command that runs on both platforms.
@@ -580,6 +607,58 @@ const result = await execute([
 ])
 ```
 
+### Burn subtitles into a video
+
+The bundled builds include libass with FreeType, HarfBuzz, and FriBidi, so ASS/SSA styling and complex scripts (Arabic, Urdu, and other RTL or shaped text) render correctly. System fonts are found automatically — through Core Text on iOS and through fontconfig scanning `/system/fonts` on Android.
+
+```typescript
+import { execute, normalizePath } from 'munim-ffmpeg'
+
+// ASS/SSA keeps its embedded styling: fonts, colours, outlines,
+// shadows, positioning, karaoke — everything the format supports.
+await execute([
+  '-y',
+  '-i', inputPath,
+  '-vf', `ass=filename=${normalizePath(subtitlePath)}`,
+  '-c:a', 'copy',
+  outputPath,
+])
+
+// SRT can be styled at burn time with force_style.
+await execute([
+  '-y',
+  '-i', inputPath,
+  '-vf', `subtitles=filename=${normalizePath(srtPath)}:force_style='Fontsize=28,PrimaryColour=&H00FFFF00,Outline=2'`,
+  '-c:a', 'copy',
+  outputPath,
+])
+```
+
+To ship your own fonts instead of relying on the device's, put them in a directory and add `:fontsdir=/path/to/fonts` to the filter. Note that filter arguments are colon-separated, so a path containing `:` must be escaped — app sandbox paths on both platforms are safe as-is.
+
+### Work with MKV and multiple tracks
+
+Matroska muxing and demuxing is compiled in, along with FFmpeg's standard `-map` stream selection and `-c copy` remuxing:
+
+```typescript
+import { execute } from 'munim-ffmpeg'
+
+// Bundle one video, two audio languages, and a subtitle track into MKV.
+await execute([
+  '-y',
+  '-i', videoPath, '-i', urduAudioPath, '-i', subtitlePath,
+  '-map', '0:v:0', '-map', '0:a:0', '-map', '1:a:0', '-map', '2:s:0',
+  '-c:v', 'copy', '-c:a', 'aac', '-c:s', 'srt',
+  '-metadata:s:a:1', 'language=urd',
+  outputMkvPath,
+])
+
+// Extract the second audio track without re-encoding.
+await execute([
+  '-y', '-i', outputMkvPath, '-map', '0:a:1', '-c', 'copy', trackPath,
+])
+```
+
 ### Cancel a long-running command
 
 ```typescript
@@ -632,7 +711,7 @@ if (result.success) {
 
 The JavaScript, TypeScript, Swift, Kotlin, C core, and generated Nitro bridge in this repository are Apache-2.0.
 
-The bundled FFmpeg 9.0.1 is **LGPLv3**, on both platforms. It is configured without `--enable-gpl`, so no x264, x265, xvid, or vid.stab. The external libraries it links are LAME (LGPL), Opus (BSD), libvpx (BSD), dav1d (BSD), openh264 (BSD 2-clause), and mbedTLS (Apache-2.0) on Android.
+The bundled FFmpeg 9.0.1 is **LGPLv3**, on both platforms. It is configured without `--enable-gpl`, so no x264, x265, xvid, or vid.stab. The external libraries it links are LAME (LGPL), Opus (BSD), libvpx (BSD), dav1d (BSD), openh264 (BSD 2-clause), libass (ISC), FreeType (FTL, BSD-style with credit), HarfBuzz (MIT-style), FriBidi (LGPL), and, on Android only, mbedTLS (Apache-2.0), fontconfig (MIT-style), and expat (MIT). None of them change the LGPL story.
 
 > **A note on H.264 patents.** Hardware encoders are covered by the licences device manufacturers already pay for. Software H.264 encoding through `libopenh264` is not: Cisco's royalty coverage applies to *their* prebuilt binary, and this package builds openh264 from source. If you ship software H.264 encoding at scale, check where you stand with AVC licensing. Hardware encoders avoid the question entirely, which is why `pickEncoder` should list them first.
 

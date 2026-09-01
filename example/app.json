@@ -8,7 +8,8 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.sheehanmunim.munimffmpegexample"
+      "bundleIdentifier": "com.sheehanmunim.munimffmpegexample",
+      "appleTeamId": "6T5J6U2UVT"
     },
     "android": {
       "adaptiveIcon": {

@@ -30,7 +30,8 @@ Pod::Spec.new do |s|
   s.pod_target_xcconfig = {
     "HEADER_SEARCH_PATHS" => "\"$(PODS_TARGET_SRCROOT)/ios\"",
   }
-  s.frameworks = "AudioToolbox", "VideoToolbox", "CoreMedia", "AVFoundation", "CoreVideo", "Security"
+  # CoreText and CoreGraphics are libass's font provider on iOS.
+  s.frameworks = "AudioToolbox", "VideoToolbox", "CoreMedia", "AVFoundation", "CoreVideo", "Security", "CoreText", "CoreGraphics"
   s.libraries = "bz2", "z", "iconv", "c++"
 
   # Must be public so CocoaPods puts it in the module umbrella, which is how the
