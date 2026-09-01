@@ -21,7 +21,12 @@ typedef void (*munim_statistics_callback)(void *context, double time_ms,
 /** Version string of the linked FFmpeg, e.g. "9.0.1". */
 const char *munim_ffmpeg_version(void);
 
-/** Callbacks apply to whichever execution is currently running. */
+/**
+ * Installs the callback functions. `context` is the default value handed to
+ * them; an execution started through one of the `_ctx` variants overrides it
+ * for exactly as long as that execution holds the core's lock, which is how
+ * callers waiting concurrently keep their callbacks apart.
+ */
 void munim_ffmpeg_set_callbacks(munim_log_callback on_log,
                                 munim_statistics_callback on_statistics,
                                 void *context);
@@ -38,9 +43,17 @@ void munim_ffmpeg_set_callbacks(munim_log_callback on_log,
 int munim_ffmpeg_execute(int argc, const char *const *argv,
                          const char *stdout_path);
 
+/** Like munim_ffmpeg_execute, with a per-run callback context. */
+int munim_ffmpeg_execute_ctx(int argc, const char *const *argv,
+                             const char *stdout_path, void *session);
+
 /** Runs `ffprobe`, writing its report to `output_path` via `-o`. */
 int munim_ffmpeg_probe(int argc, const char *const *argv,
                        const char *output_path);
+
+/** Like munim_ffmpeg_probe, with a per-run callback context. */
+int munim_ffmpeg_probe_ctx(int argc, const char *const *argv,
+                           const char *output_path, void *session);
 
 /**
  * Requests cancellation of the running execution, and of any execution already

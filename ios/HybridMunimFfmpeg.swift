@@ -1,21 +1,39 @@
 import Foundation
 import NitroModules
 
-/// Callbacks for the execution currently holding the core's lock. The core
-/// serialises executions, so a single slot is enough.
-private final class ActiveSession {
-  var onLog: ((String) -> Void)?
-  var onStatistics: ((Double, Double, Double, Double, Double, Double, Double) -> Void)?
-  var output = ""
+/// Per-run callback target, handed to the core as the context pointer. The
+/// core only routes callbacks to whichever session actually holds its
+/// execution lock, so concurrently submitted sessions never see each other's
+/// logs.
+private final class Session {
+  let onLog: ((String) -> Void)?
+  let onStatistics: ((Double, Double, Double, Double, Double, Double, Double) -> Void)?
+  private var buffer = ""
+  // FFmpeg logs from several of its own threads at once, so the buffer needs
+  // the lock even though each session belongs to a single execution.
+  private let lock = NSLock()
 
-  func reset() {
-    onLog = nil
-    onStatistics = nil
-    output = ""
+  init(
+    onLog: ((String) -> Void)?,
+    onStatistics: ((Double, Double, Double, Double, Double, Double, Double) -> Void)? = nil
+  ) {
+    self.onLog = onLog
+    self.onStatistics = onStatistics
+  }
+
+  func append(_ text: String) {
+    lock.lock()
+    buffer += text
+    lock.unlock()
+  }
+
+  var output: String {
+    lock.lock()
+    defer { lock.unlock() }
+    return buffer
   }
 }
 
-private let active = ActiveSession()
 // Concurrent on purpose: the C core serialises executions behind its own lock,
 // and a request that is waiting there can still be cancelled. A serial queue
 // would hold the second call outside the core, where cancelAll() cannot see it.
@@ -25,16 +43,17 @@ private let executionQueue = DispatchQueue(
   attributes: .concurrent
 )
 
-private func installCallbacks() {
-  munim_ffmpeg_set_callbacks({ _, message in
-    guard let message else { return }
-    let text = String(cString: message)
-    active.output += text
-    active.onLog?(text)
-  }, { _, timeMs, sizeBytes, bitrate, speed, frame, fps, quality in
-    active.onStatistics?(timeMs, sizeBytes, bitrate, speed, frame, fps, quality)
-  }, nil)
-}
+private let installCallbacks: Void = munim_ffmpeg_set_callbacks({ context, message in
+  guard let context, let message else { return }
+  let session = Unmanaged<Session>.fromOpaque(context).takeUnretainedValue()
+  let text = String(cString: message)
+  session.append(text)
+  session.onLog?(text)
+}, { context, timeMs, sizeBytes, bitrate, speed, frame, fps, quality in
+  guard let context else { return }
+  let session = Unmanaged<Session>.fromOpaque(context).takeUnretainedValue()
+  session.onStatistics?(timeMs, sizeBytes, bitrate, speed, frame, fps, quality)
+}, nil)
 
 final class HybridMunimFfmpeg: HybridMunimFfmpegSpec {
   private var sessionCounter: Double = 0
@@ -88,26 +107,28 @@ final class HybridMunimFfmpeg: HybridMunimFfmpegSpec {
       // its logger, so it is captured to a file and appended to the output.
       let printedPath = Self.temporaryFile()
 
-      installCallbacks()
-      active.reset()
-      active.onLog = onLog
-      active.onStatistics = onStatistics
+      _ = installCallbacks
+      let session = Session(onLog: onLog, onStatistics: onStatistics)
 
-      let returnCode = withArrayOfCStrings(arguments_) { argv in
-        munim_ffmpeg_execute(Int32(arguments_.count), argv, printedPath)
+      let returnCode = withExtendedLifetime(session) {
+        withArrayOfCStrings(arguments_) { argv in
+          munim_ffmpeg_execute_ctx(
+            Int32(arguments_.count),
+            argv,
+            printedPath,
+            Unmanaged.passUnretained(session).toOpaque()
+          )
+        }
       }
 
       let printed = (try? String(contentsOfFile: printedPath, encoding: .utf8)) ?? ""
       try? FileManager.default.removeItem(atPath: printedPath)
 
-      let output = active.output + printed
-      active.reset()
-
       promise.resolve(
         withResult: self.result(
           sessionId: sessionId,
           returnCode: returnCode,
-          output: output,
+          output: session.output + printed,
           startedAt: startedAt
         )
       )
@@ -178,21 +199,24 @@ final class HybridMunimFfmpeg: HybridMunimFfmpegSpec {
   ) -> (Int32, String) {
     let destination = temporaryFile()
 
-    installCallbacks()
-    active.reset()
-    active.onLog = onLog
+    _ = installCallbacks
+    let session = Session(onLog: onLog)
 
-    let returnCode = withArrayOfCStrings(arguments) { argv in
-      munim_ffmpeg_probe(Int32(arguments.count), argv, destination)
+    let returnCode = withExtendedLifetime(session) {
+      withArrayOfCStrings(arguments) { argv in
+        munim_ffmpeg_probe_ctx(
+          Int32(arguments.count),
+          argv,
+          destination,
+          Unmanaged.passUnretained(session).toOpaque()
+        )
+      }
     }
 
     let report = (try? String(contentsOfFile: destination, encoding: .utf8)) ?? ""
     try? FileManager.default.removeItem(atPath: destination)
 
-    let logs = active.output
-    active.reset()
-
-    return (returnCode, report.isEmpty ? logs : report)
+    return (returnCode, report.isEmpty ? session.output : report)
   }
 
   func cancel(sessionId: Double?) throws {

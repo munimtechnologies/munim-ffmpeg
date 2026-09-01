@@ -53,37 +53,21 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
     onSessionCreated?.invoke(sessionId)
 
     return Promise.async {
-      val output = StringBuilder()
       val startedAt = System.currentTimeMillis()
       // ffmpeg prints reports such as -encoders and -protocols to stdout rather
       // than through its logger, so it is captured to a file and appended.
       val stdout = File.createTempFile("munim-ffmpeg", ".txt")
 
-      val returnCode = FFmpegNative.withCallbacks(
-        onLog = { message ->
-          output.append(message)
-          onLog?.invoke(message)
-        },
-        onStatistics = { statistics ->
-          onStatistics?.invoke(
-            statistics.timeMs,
-            statistics.sizeBytes,
-            statistics.bitrateKbits,
-            statistics.speed,
-            statistics.videoFrameNumber,
-            statistics.fps,
-            statistics.quality,
-          )
-        },
-      ) {
-        FFmpegNative.nativeExecute(arguments_, stdout.absolutePath)
-      }
+      val session = FFmpegSession(
+        logSink = { message -> onLog?.invoke(message) },
+        statisticsSink = onStatistics,
+      )
+      val returnCode = FFmpegNative.nativeExecute(arguments_, stdout.absolutePath, session)
 
       val printed = runCatching { stdout.readText() }.getOrDefault("")
       stdout.delete()
-      output.append(printed)
 
-      result(sessionId, returnCode, output.toString(), System.currentTimeMillis() - startedAt)
+      result(sessionId, returnCode, session.output + printed, System.currentTimeMillis() - startedAt)
     }
   }
 
@@ -138,19 +122,15 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
   ): Pair<Int, String> {
     val destination = File.createTempFile("munim-ffprobe", ".txt")
     try {
-      val logs = StringBuilder()
-      val returnCode = FFmpegNative.withCallbacks(
-        onLog = { message ->
-          logs.append(message)
-          onLog?.invoke(message)
-        },
-        onStatistics = null,
-      ) {
-        FFmpegNative.nativeExecuteProbe(arguments, destination.absolutePath)
-      }
+      val session = FFmpegSession(
+        logSink = { message -> onLog?.invoke(message) },
+        statisticsSink = null,
+      )
+      val returnCode =
+        FFmpegNative.nativeExecuteProbe(arguments, destination.absolutePath, session)
 
       val report = destination.readText()
-      return returnCode to report.ifEmpty { logs.toString() }
+      return returnCode to report.ifEmpty { session.output }
     } finally {
       destination.delete()
     }

@@ -166,8 +166,8 @@ static void free_arguments(char **argv, int count)
     free(argv);
 }
 
-int munim_ffmpeg_execute(int argc, const char *const *argv,
-                         const char *stdout_path)
+int munim_ffmpeg_execute_ctx(int argc, const char *const *argv,
+                             const char *stdout_path, void *session)
 {
     unsigned long epoch = cancel_epoch;
     char **arguments = copy_arguments("ffmpeg", argc, argv, 0);
@@ -180,11 +180,16 @@ int munim_ffmpeg_execute(int argc, const char *const *argv,
     if (cancel_epoch != epoch) {
         ret = MUNIM_FFMPEG_CANCELLED;
     } else {
+        /* The context switches inside the lock, so callbacks always belong to
+         * the execution that is actually running, never to one still queued. */
+        void *default_context = callback_context;
+        if (session) callback_context = session;
         munim_ffmpeg_hook_reset();
         reset_log_level();
         int saved = redirect_stdout(stdout_path);
         ret = ffmpeg_main(argc + 1, arguments);
         restore_stdout(saved);
+        callback_context = default_context;
     }
     pthread_mutex_unlock(&execution_lock);
 
@@ -192,8 +197,14 @@ int munim_ffmpeg_execute(int argc, const char *const *argv,
     return ret;
 }
 
-int munim_ffmpeg_probe(int argc, const char *const *argv,
-                       const char *output_path)
+int munim_ffmpeg_execute(int argc, const char *const *argv,
+                         const char *stdout_path)
+{
+    return munim_ffmpeg_execute_ctx(argc, argv, stdout_path, NULL);
+}
+
+int munim_ffmpeg_probe_ctx(int argc, const char *const *argv,
+                           const char *output_path, void *session)
 {
     unsigned long epoch = cancel_epoch;
     char **arguments = copy_arguments("ffprobe", argc, argv, 2);
@@ -212,14 +223,23 @@ int munim_ffmpeg_probe(int argc, const char *const *argv,
     if (cancel_epoch != epoch) {
         ret = MUNIM_FFMPEG_CANCELLED;
     } else {
+        void *default_context = callback_context;
+        if (session) callback_context = session;
         munim_ffprobe_hook_reset();
         reset_log_level();
         ret = ffprobe_main(total, arguments);
+        callback_context = default_context;
     }
     pthread_mutex_unlock(&execution_lock);
 
     free_arguments(arguments, total);
     return ret;
+}
+
+int munim_ffmpeg_probe(int argc, const char *const *argv,
+                       const char *output_path)
+{
+    return munim_ffmpeg_probe_ctx(argc, argv, output_path, NULL);
 }
 
 void munim_ffmpeg_cancel(void)
