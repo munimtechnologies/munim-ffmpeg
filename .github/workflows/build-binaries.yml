@@ -46,12 +46,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # fontconfig 2.16 needs Meson 1.6+, newer than the apt package, so Meson
+      # comes from pip.
       - name: Install build tools
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            meson ninja-build nasm yasm pkg-config gperf \
+            ninja-build nasm yasm pkg-config gperf \
             autoconf automake libtool cmake xz-utils
+          python3 -m pip install --user 'meson>=1.6'
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       # Pinned to the same NDK the local build uses, so both produce the same
       # binaries; the runner's preinstalled "latest" NDK moves over time.
