@@ -1,3 +1,19 @@
+## [0.6.0](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.5.1...v0.6.0) (2026-09-02)
+
+### ✨ Features
+
+* **example:** add an interactive playground to the Expo example ([2f88a31](https://github.com/munimtechnologies/munim-ffmpeg/commit/2f88a319b69b0a5d0bc64c2ccdcdf72eb3c857f9)), closes [#5](https://github.com/munimtechnologies/munim-ffmpeg/issues/5)
+* ship one native library per platform and encode AVIF with libaom ([c8210f0](https://github.com/munimtechnologies/munim-ffmpeg/commit/c8210f0b290108ad78d740eca6c87455a115ee4d)), closes [#6](https://github.com/munimtechnologies/munim-ffmpeg/issues/6) [#8](https://github.com/munimtechnologies/munim-ffmpeg/issues/8)
+
+### 📚 Documentation
+
+* document and prove soft subtitle embedding ([b6a5bae](https://github.com/munimtechnologies/munim-ffmpeg/commit/b6a5bae05852723847b516ba485322abbd8f63ff)), closes [#3](https://github.com/munimtechnologies/munim-ffmpeg/issues/3)
+* mention soft subtitle embedding in the feature list ([#4](https://github.com/munimtechnologies/munim-ffmpeg/issues/4)) ([fdb7778](https://github.com/munimtechnologies/munim-ffmpeg/commit/fdb777810442e19b32ff6c1c9320587051cfe3cc))
+
+### 🛠️ Other changes
+
+* sync package-lock with the release ([7ea9fce](https://github.com/munimtechnologies/munim-ffmpeg/commit/7ea9fceeebe15a0a71c7c5b6814270f7c5a1c15f))
+
 ## [0.5.1](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.5.0...v0.5.1) (2026-09-01)
 
 ### 🐛 Bug Fixes
