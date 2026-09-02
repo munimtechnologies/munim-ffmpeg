@@ -56,11 +56,13 @@ for file in "${SHARED_SOURCES[@]}" "${FFMPEG_SOURCES[@]}"; do
     -o "$WORK/obj/${file%.c}.o"
 done
 
-# A static link pulls in both tools, and each defines program_name and
+# A static link pulls in both tools, and each defines program_name,
+# program_birth_year and
 # show_help_default, so ffprobe's copies are renamed. cmdutils is shared.
 "$CC" "${FFTOOLS_CFLAGS[@]}" \
   -Dmain=ffprobe_main \
   -Dprogram_name=ffprobe_program_name \
+  -Dprogram_birth_year=ffprobe_program_birth_year \
   -Dshow_help_default=ffprobe_show_help_default \
   -c "$WORK/src/ffprobe.c" -o "$WORK/probe/ffprobe.o"
 

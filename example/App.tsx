@@ -12,9 +12,13 @@ import {
   View,
 } from 'react-native'
 
+import { Playground } from './Playground'
 import { runSuite, type CheckResult } from './suite'
 
+type Tab = 'playground' | 'suite'
+
 export default function App() {
+  const [tab, setTab] = useState<Tab>('playground')
   const [running, setRunning] = useState(false)
   const [version, setVersion] = useState<string>()
   const [checks, setChecks] = useState<CheckResult[]>([])
@@ -59,73 +63,113 @@ export default function App() {
       <StatusBar style="light" />
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.eyebrow}>
-          <Text style={styles.eyebrowText}>NITRO MODULE</Text>
+          <Text style={styles.eyebrowText}>EXPO SDK 57 · NITRO MODULE</Text>
         </View>
         <Text style={styles.title}>Munim FFmpeg</Text>
         <Text style={styles.subtitle}>
           Type-safe FFmpeg and FFprobe for Expo and React Native.
         </Text>
 
-        <View style={styles.summary}>
-          <Text style={styles.summaryText}>
-            {running
-              ? `Running on ${Platform.OS}…`
-              : `${passed} passed${failed > 0 ? `, ${failed} failed` : ''}`}
-          </Text>
-          {version ? (
-            <Text style={styles.summaryVersion} selectable>
-              {version}
-            </Text>
-          ) : null}
+        <View style={styles.tabs}>
+          {(
+            [
+              ['playground', 'Playground'],
+              [
+                'suite',
+                `Device suite${checks.length ? ` · ${passed}/${checks.length}` : ''}`,
+              ],
+            ] as const
+          ).map(([key, label]) => (
+            <Pressable
+              key={key}
+              onPress={() => setTab(key)}
+              style={[styles.tab, tab === key && styles.tabActive]}
+            >
+              <Text
+                style={[styles.tabText, tab === key && styles.tabTextActive]}
+              >
+                {label}
+              </Text>
+            </Pressable>
+          ))}
         </View>
 
-        <Pressable
-          disabled={running}
-          onPress={runFFmpeg}
-          style={({ pressed }) => [
-            styles.button,
-            pressed && styles.buttonPressed,
-            running && styles.buttonDisabled,
-          ]}
-        >
-          {running ? (
-            <ActivityIndicator color="#07110b" />
-          ) : (
-            <Text style={styles.buttonText}>Run Device Suite</Text>
-          )}
-        </Pressable>
-
-        {error ? (
-          <View style={[styles.card, styles.cardFailed]}>
-            <Text style={styles.checkName}>Suite failed to run</Text>
-            <Text selectable style={styles.checkDetail}>
-              {error}
-            </Text>
-          </View>
-        ) : null}
-
-        {checks.map((check) => (
-          <View
-            key={check.name}
-            style={[styles.card, check.passed ? null : styles.cardFailed]}
-          >
-            <View style={styles.checkHeader}>
-              <Text
-                style={[
-                  styles.checkStatus,
-                  check.passed ? styles.checkPassed : styles.checkFailed,
-                ]}
-              >
-                {check.passed ? '✓' : '✗'}
+        {tab === 'playground' ? (
+          <>
+            {running ? (
+              <Text style={styles.summaryText}>
+                Device suite is running in the background; FFmpeg runs one
+                command at a time, so actions queue behind it.
               </Text>
-              <Text style={styles.checkName}>{check.name}</Text>
-              <Text style={styles.checkDuration}>{check.durationMs} ms</Text>
+            ) : null}
+            <Playground />
+          </>
+        ) : (
+          <>
+            <View style={styles.summary}>
+              <Text style={styles.summaryText}>
+                {running
+                  ? `Running on ${Platform.OS}…`
+                  : `${passed} passed${failed > 0 ? `, ${failed} failed` : ''}`}
+              </Text>
+              {version ? (
+                <Text style={styles.summaryVersion} selectable>
+                  {version}
+                </Text>
+              ) : null}
             </View>
-            <Text selectable style={styles.checkDetail}>
-              {check.detail}
-            </Text>
-          </View>
-        ))}
+
+            <Pressable
+              disabled={running}
+              onPress={runFFmpeg}
+              style={({ pressed }) => [
+                styles.button,
+                pressed && styles.buttonPressed,
+                running && styles.buttonDisabled,
+              ]}
+            >
+              {running ? (
+                <ActivityIndicator color="#07110b" />
+              ) : (
+                <Text style={styles.buttonText}>Run Device Suite</Text>
+              )}
+            </Pressable>
+
+            {error ? (
+              <View style={[styles.card, styles.cardFailed]}>
+                <Text style={styles.checkName}>Suite failed to run</Text>
+                <Text selectable style={styles.checkDetail}>
+                  {error}
+                </Text>
+              </View>
+            ) : null}
+
+            {checks.map((check) => (
+              <View
+                key={check.name}
+                style={[styles.card, check.passed ? null : styles.cardFailed]}
+              >
+                <View style={styles.checkHeader}>
+                  <Text
+                    style={[
+                      styles.checkStatus,
+                      check.passed ? styles.checkPassed : styles.checkFailed,
+                    ]}
+                  >
+                    {check.passed ? '✓' : '✗'}
+                  </Text>
+                  <Text style={styles.checkName}>{check.name}</Text>
+                  <Text style={styles.checkDuration}>
+                    {check.durationMs} ms
+                  </Text>
+                </View>
+                <Text selectable style={styles.checkDetail}>
+                  {check.detail}
+                </Text>
+              </View>
+            ))}
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   )
@@ -169,8 +213,34 @@ const styles = StyleSheet.create({
     marginTop: 10,
     maxWidth: 360,
   },
-  summary: {
+  tabs: {
+    backgroundColor: '#0d1d13',
+    borderColor: '#1e3926',
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: 'row',
     marginTop: 24,
+    padding: 4,
+  },
+  tab: {
+    alignItems: 'center',
+    borderRadius: 10,
+    flex: 1,
+    paddingVertical: 10,
+  },
+  tabActive: {
+    backgroundColor: '#1e3926',
+  },
+  tabText: {
+    color: '#a8bdad',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  tabTextActive: {
+    color: '#72f59b',
+  },
+  summary: {
+    marginTop: 20,
   },
   summaryText: {
     color: '#72f59b',

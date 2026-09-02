@@ -1,0 +1,212 @@
+# Builds the FFmpeg binaries for every slice the package ships (issue #7).
+#
+# Each slice builds on its own runner in parallel, then one macOS job merges
+# them with scripts/ffmpeg/package.sh — the same script a local release uses —
+# so a CI build and a local build produce the same bundle layout, checksum
+# manifest, and build-info.txt.
+#
+# Run it by hand from the Actions tab (optionally attaching the result to a
+# GitHub release), or let it run on pull requests that touch the build scripts.
+name: Build binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      ffmpeg_version:
+        description: FFmpeg release to build
+        default: '9.0.1'
+      release_tag:
+        description: >-
+          Attach the bundle to this GitHub release (for example v0.6.0). Leave
+          empty to only keep it as a workflow artifact.
+        default: ''
+  pull_request:
+    paths:
+      - scripts/ffmpeg/**
+      - .github/workflows/build-binaries.yml
+
+concurrency:
+  group: build-binaries-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FFMPEG_VERSION: ${{ inputs.ffmpeg_version || '9.0.1' }}
+  FFMPEG_WORKSPACE: ${{ github.workspace }}/.build
+  NDK_VERSION: 27.1.12297006
+
+jobs:
+  android:
+    name: Android ${{ matrix.abi }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a, x86_64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            meson ninja-build nasm yasm pkg-config gperf \
+            autoconf automake libtool cmake xz-utils
+
+      # Pinned to the same NDK the local build uses, so both produce the same
+      # binaries; the runner's preinstalled "latest" NDK moves over time.
+      - name: Install Android NDK ${{ env.NDK_VERSION }}
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" > /dev/null
+          echo "ANDROID_NDK=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Cache dependency sources
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.FFMPEG_WORKSPACE }}/deps/*.tar.*
+          key: deps-${{ hashFiles('scripts/ffmpeg/build-android.sh', 'scripts/ffmpeg/build-ios.sh') }}
+
+      - name: Build FFmpeg for ${{ matrix.abi }}
+        run: |
+          scripts/ffmpeg/fetch-source.sh
+          scripts/ffmpeg/build-android.sh "${{ matrix.abi }}"
+
+      - name: Show what was built
+        run: |
+          lib="$FFMPEG_WORKSPACE/out/android-${{ matrix.abi }}/lib/libmunimffmpeg.so"
+          ls -la "$lib"
+          "$ANDROID_NDK"/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf -d "$lib" | grep NEEDED
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-android-${{ matrix.abi }}
+          path: ${{ env.FFMPEG_WORKSPACE }}/build/*.log
+          if-no-files-found: ignore
+
+      - name: Upload slice
+        uses: actions/upload-artifact@v4
+        with:
+          name: slice-android-${{ matrix.abi }}
+          if-no-files-found: error
+          path: |
+            ${{ env.FFMPEG_WORKSPACE }}/out/android-${{ matrix.abi }}/lib/libmunimffmpeg.so
+            ${{ env.FFMPEG_WORKSPACE }}/build/ffmpeg-${{ matrix.abi }}-configure.log
+            ${{ env.FFMPEG_WORKSPACE }}/build/android-${{ matrix.abi }}/ffbuild/config.log
+
+  ios:
+    name: iOS ${{ matrix.sdk }} ${{ matrix.arch }}
+    runs-on: macos-15
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { sdk: iphoneos, arch: arm64 }
+          - { sdk: iphonesimulator, arch: arm64 }
+          - { sdk: iphonesimulator, arch: x86_64 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: brew install meson ninja nasm yasm pkg-config gperf autoconf automake libtool
+
+      - name: Cache dependency sources
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.FFMPEG_WORKSPACE }}/deps/*.tar.*
+          key: deps-${{ hashFiles('scripts/ffmpeg/build-android.sh', 'scripts/ffmpeg/build-ios.sh') }}
+
+      - name: Build FFmpeg for ${{ matrix.sdk }} ${{ matrix.arch }}
+        run: |
+          scripts/ffmpeg/fetch-source.sh
+          scripts/ffmpeg/build-ios.sh "${{ matrix.sdk }}" "${{ matrix.arch }}"
+
+      - name: Show what was built
+        run: |
+          lib="$FFMPEG_WORKSPACE/out/ios-${{ matrix.sdk }}-${{ matrix.arch }}/lib/libmunimffmpeg.a"
+          ls -la "$lib"
+          lipo -info "$lib"
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-ios-${{ matrix.sdk }}-${{ matrix.arch }}
+          path: ${{ env.FFMPEG_WORKSPACE }}/build/*.log
+          if-no-files-found: ignore
+
+      - name: Upload slice
+        uses: actions/upload-artifact@v4
+        with:
+          name: slice-ios-${{ matrix.sdk }}-${{ matrix.arch }}
+          if-no-files-found: error
+          path: |
+            ${{ env.FFMPEG_WORKSPACE }}/out/ios-${{ matrix.sdk }}-${{ matrix.arch }}/lib/libmunimffmpeg.a
+            ${{ env.FFMPEG_WORKSPACE }}/build/ffmpeg-${{ matrix.sdk }}-${{ matrix.arch }}-configure.log
+            ${{ env.FFMPEG_WORKSPACE }}/build/ios-${{ matrix.sdk }}-${{ matrix.arch }}/ffbuild/config.log
+
+  package:
+    name: Package bundle
+    needs: [android, ios]
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Every slice artifact was uploaded relative to the workspace root, so
+      # merging them recreates the out/ and build/ layout package.sh expects.
+      - name: Collect slices
+        uses: actions/download-artifact@v4
+        with:
+          pattern: slice-*
+          path: ${{ env.FFMPEG_WORKSPACE }}
+          merge-multiple: true
+
+      - name: Assemble the bundle
+        run: scripts/ffmpeg/package.sh
+
+      - name: Summarise
+        run: |
+          {
+            echo '### munim-ffmpeg binaries'
+            echo
+            echo '```'
+            cat scripts/binaries.json
+            echo '```'
+            echo
+            echo '<details><summary>build-info.txt</summary>'
+            echo
+            echo '```'
+            cat dist-binaries/build-info.txt
+            echo '```'
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: munim-ffmpeg-binaries
+          if-no-files-found: error
+          path: |
+            dist-binaries/munim-ffmpeg-binaries.tar.gz
+            dist-binaries/munim-ffmpeg-binaries.tar.gz.sha256
+            dist-binaries/build-info.txt
+            scripts/binaries.json
+
+      # A release built here must be the one scripts/binaries.json points at,
+      # so the checksum is printed for the maintainer to commit alongside it.
+      - name: Attach to release ${{ inputs.release_tag }}
+        if: inputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ inputs.release_tag }}" \
+            dist-binaries/munim-ffmpeg-binaries.tar.gz \
+            dist-binaries/build-info.txt \
+            --clobber
+          echo "Attached to ${{ inputs.release_tag }}; commit scripts/binaries.json with sha256 $(cat dist-binaries/munim-ffmpeg-binaries.tar.gz.sha256)"

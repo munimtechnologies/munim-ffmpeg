@@ -1,6 +1,6 @@
-# The native binaries build on a Mac with the NDK and Xcode and take ~40
-# minutes, so CI only guards the JavaScript surface: types, lint, the compiled
-# lib, and that the published package stays well-formed.
+# The native binaries take ~40 minutes to build, so this workflow only guards
+# the JavaScript surface: types, lint, the compiled lib, and that the published
+# package stays well-formed. build-binaries.yml builds the native libraries.
 name: CI
 
 on:

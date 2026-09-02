@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Compiles FFmpeg's fftools plus the munim core into the two shared libraries
-# the Kotlin layer loads, for one Android ABI.
+# Compiles FFmpeg's fftools plus the munim core, then links them with the
+# static FFmpeg libraries and every dependency into the single shared library
+# the Kotlin layer loads: libmunimffmpeg.so.
 set -euo pipefail
 
 ABI="${1:-arm64-v8a}"
-NDK="${ANDROID_NDK:-/opt/homebrew/share/android-commandlinetools/ndk/27.1.12297006}"
+NDK="${ANDROID_NDK:-${ANDROID_NDK_HOME:-${ANDROID_NDK_LATEST_HOME:-/opt/homebrew/share/android-commandlinetools/ndk/27.1.12297006}}}"
 API="${ANDROID_API:-24}"
 HOST_TAG="$(ls "$NDK/toolchains/llvm/prebuilt" | head -1)"
 TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/$HOST_TAG"
@@ -24,6 +25,7 @@ case "$ABI" in
 esac
 
 CC="$TOOLCHAIN/bin/$TRIPLE$API-clang"
+STRIP="$TOOLCHAIN/bin/llvm-strip"
 
 rm -rf "$WORK"
 mkdir -p "$WORK/obj" "$WORK/probe"
@@ -40,7 +42,7 @@ void android_binder_threadpool_init_if_required(void)
 BINDER
 
 CFLAGS=(
-  -O2 -fPIC -DANDROID $EXTRA_CFLAGS
+  -O2 -fPIC -DANDROID -ffunction-sections -fdata-sections $EXTRA_CFLAGS
   -D_ISOC11_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE
   -DPIC -DZLIB_CONST
   "-I$SOURCE/compat/stdbit"
@@ -70,26 +72,44 @@ for file in "${SHARED_SOURCES[@]}" "${FFMPEG_SOURCES[@]}"; do
     -o "$WORK/obj/${file%.c}.o"
 done
 
-# ffprobe defines program_name and show_help_default just like ffmpeg.c, so it
-# gets its own library with its own copy of cmdutils.
-for file in "${SHARED_SOURCES[@]}" ffprobe.c; do
-  mkdir -p "$WORK/probe/$(dirname "$file")"
-  "$CC" "${FFTOOLS_CFLAGS[@]}" -Dmain=ffprobe_main -c "$WORK/src/$file" \
-    -o "$WORK/probe/${file%.c}.o"
-done
+# ffprobe defines program_name, program_birth_year and show_help_default just
+# like ffmpeg.c, so its
+# copies are renamed and cmdutils is shared; both tools live in one library.
+"$CC" "${FFTOOLS_CFLAGS[@]}" \
+  -Dmain=ffprobe_main \
+  -Dprogram_name=ffprobe_program_name \
+  -Dprogram_birth_year=ffprobe_program_birth_year \
+  -Dshow_help_default=ffprobe_show_help_default \
+  -c "$WORK/src/ffprobe.c" -o "$WORK/probe/ffprobe.o"
 
 "$CC" "${CFLAGS[@]}" -c "$HERE/src/munim_ffmpeg_core.c" -o "$WORK/obj/munim_ffmpeg_core.o"
 "$CC" "${CFLAGS[@]}" -c "$HERE/src/android_bridge.c" -o "$WORK/obj/android_bridge.o"
 
-FFMPEG_LIBS=(-lavdevice -lavfilter -lavformat -lavcodec -lswresample -lswscale -lavutil)
-LINK_FLAGS=(-L"$PREFIX/lib" "${FFMPEG_LIBS[@]}" -lm -lz -llog -landroid
-            -Wl,-Bsymbolic -Wl,-z,max-page-size=16384)
+# FFmpeg and every dependency are static archives, so the app loads exactly one
+# library (issue #8). pkg-config expands the full static link line from
+# FFmpeg's own .pc files, so adding a dependency to build-android.sh does not
+# also require editing a list here.
+FFMPEG_LIBS="$(PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" pkg-config --static --libs \
+  libavdevice libavfilter libavformat libavcodec libswresample libswscale libavutil)"
 
-"$CC" -shared -fPIC -o "$PREFIX/lib/libmunimffprobe9.so" \
-  $(find "$WORK/probe" -name '*.o') "${LINK_FLAGS[@]}"
+# Only the JNI entry points are exported: FFmpeg's symbols stay internal, which
+# keeps the dynamic symbol table small and avoids clashing with any other
+# FFmpeg an app might carry.
+cat > "$WORK/exports.map" <<'MAP'
+{ global: JNI_OnLoad; Java_*; local: *; };
+MAP
 
-"$CC" -shared -fPIC -o "$PREFIX/lib/libmunimffmpeg9.so" \
-  $(find "$WORK/obj" -name '*.o') "${LINK_FLAGS[@]}" \
-  -L"$PREFIX/lib" -lmunimffprobe9
+rm -f "$PREFIX"/lib/libmunimff*.so
+"$CC" -shared -fPIC -o "$PREFIX/lib/libmunimffmpeg.so" \
+  $(find "$WORK/obj" "$WORK/probe" -name '*.o') \
+  -L"$PREFIX/lib" -Wl,--start-group $FFMPEG_LIBS -Wl,--end-group \
+  -lc++_shared -lm -lz -llog -landroid \
+  -Wl,-Bsymbolic -Wl,--gc-sections -Wl,--exclude-libs,ALL \
+  -Wl,--version-script="$WORK/exports.map" \
+  -Wl,-z,max-page-size=16384
 
-echo "  built libmunimffmpeg9.so and libmunimffprobe9.so"
+# Gradle strips native libraries when it packages an app anyway; doing it here
+# keeps the local symbol table (over half the file) out of the download.
+"$STRIP" --strip-unneeded "$PREFIX/lib/libmunimffmpeg.so"
+
+echo "  built libmunimffmpeg.so ($(du -h "$PREFIX/lib/libmunimffmpeg.so" | cut -f1))"
