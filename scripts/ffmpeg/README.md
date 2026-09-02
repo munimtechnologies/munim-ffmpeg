@@ -8,6 +8,12 @@ Nothing here is checked in as a binary. Builds land in `~/.munim-ffmpeg-build`
 and are staged into `ios/MunimFFmpeg.xcframework` and
 `android/src/main/jniLibs/`, both git-ignored, then bundled for release.
 
+Each platform ships **one library**: `libmunimffmpeg.a` inside the xcframework
+on iOS, and `libmunimffmpeg.so` per ABI on Android. FFmpeg, fftools, the core
+and every external library are linked in statically; the only runtime
+dependencies are the system libraries and, on Android, the `libc++_shared.so`
+React Native already bundles.
+
 ## Building everything
 
 ```bash
@@ -24,22 +30,52 @@ Or one target at a time:
 ./package.sh                             # xcframework + tarball + checksum
 ```
 
-Requires the Android NDK (r27+), Xcode, and `meson`/`ninja` for dav1d. Override
-defaults with `ANDROID_NDK`, `FFMPEG_VERSION`, `FFMPEG_WORKSPACE`, `MIN_IOS`.
+Requires the Android NDK (r27+), Xcode, `cmake`, `meson`/`ninja`, `nasm`/`yasm`
+and `gperf`. Override defaults with `ANDROID_NDK`, `FFMPEG_VERSION`,
+`FFMPEG_WORKSPACE`, `MIN_IOS`. The Android scripts also run on Linux, which is
+how CI builds them.
+
+## Building in GitHub Actions
+
+[`build-binaries.yml`](../../.github/workflows/build-binaries.yml) builds every
+slice in parallel — Android on Linux runners, iOS on macOS — then runs
+`package.sh` on the merged output, exactly as a local build would. It runs on
+pull requests that touch this directory, and by hand from the Actions tab with
+two inputs:
+
+- `ffmpeg_version` — the release to build (default `9.0.1`).
+- `release_tag` — if set, the bundle and `build-info.txt` are attached to that
+  GitHub release with `--clobber`.
+
+Every run uploads a `munim-ffmpeg-binaries` artifact containing the archive,
+its checksum, `build-info.txt`, and the matching `scripts/binaries.json`. To
+release from a CI build rather than a local one, download that artifact, place
+the archive in `dist-binaries/`, commit its `scripts/binaries.json`, and run
+`npm run release:local` — the checksum in the manifest has to be the checksum
+of the archive that ends up on the release, so never mix the two.
+
+`build-info.txt` records, per slice, the exact `configure` line and FFmpeg's
+own summary of enabled libraries, encoders, decoders, muxers, demuxers,
+filters and protocols.
 
 ## What ships
 
-| | iOS | Android |
-| --- | --- | --- |
-| Architectures | arm64 device, arm64 + x86_64 simulator | arm64-v8a, armeabi-v7a, x86_64 |
-| Hardware codecs | VideoToolbox, AudioToolbox | MediaCodec |
-| TLS | SecureTransport | mbedTLS |
-| External libraries | LAME, Opus, libvpx, dav1d, openh264, FreeType, FriBidi, HarfBuzz, libass | LAME, Opus, libvpx, dav1d, openh264, mbedTLS, FreeType, FriBidi, HarfBuzz, expat, fontconfig, libass |
-| Subtitle fonts | Core Text | fontconfig over `/system/fonts` (fonts.conf written at runtime) |
+|                    | iOS                                                                              | Android                                                                                                      |
+| ------------------ | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Architectures      | arm64 device, arm64 + x86_64 simulator                                           | arm64-v8a, armeabi-v7a, x86_64                                                                               |
+| Hardware codecs    | VideoToolbox, AudioToolbox                                                       | MediaCodec                                                                                                   |
+| TLS                | SecureTransport                                                                  | mbedTLS                                                                                                      |
+| External libraries | LAME, Opus, libvpx, dav1d, libaom, openh264, FreeType, FriBidi, HarfBuzz, libass | LAME, Opus, libvpx, dav1d, libaom, openh264, mbedTLS, FreeType, FriBidi, HarfBuzz, expat, fontconfig, libass |
+| Ships as           | `MunimFFmpeg.xcframework` (one static library per platform slice)                | `libmunimffmpeg.so` per ABI                                                                                  |
+| Subtitle fonts     | Core Text                                                                        | fontconfig over `/system/fonts` (fonts.conf written at runtime)                                              |
 
 No x264, x265, xvid or vid.stab: the package stays LGPL. H.264 and HEVC come
 from the platform's hardware encoder, with openh264 (BSD) as a software H.264
 fallback for environments where hardware encoding is unavailable.
+
+AV1 is split: dav1d decodes (faster than libaom's decoder) and libaom encodes,
+which is what makes AVIF images writable. libaom is built encoder-only and
+FFmpeg's `libaom_av1` decoder is disabled so nothing is linked twice.
 
 ## Why fftools rather than a wrapper library
 
@@ -81,17 +117,27 @@ do not have to be rediscovered.
 - **Both**: `-Dstrtod=avpriv_strtod` belongs to FFmpeg's own sources only —
   applying it to the core makes it reference a symbol it cannot link.
 - **LAME 3.100**: predates C99 and needs force-included headers at compile time,
-  but not during `configure`, whose probe programs then fail.
+  but not during `configure`, whose probe programs then fail. Its `sed -i`
+  edit uses `-i.bak` because GNU and BSD sed disagree on the in-place syntax,
+  and CI builds Android on Linux.
 - **CocoaPods**: refuses an xcframework whose static libraries have differing
   binary names, so the simulator fat library is also `libmunimffmpeg.a`.
+- **Android single library**: `ffprobe.c` defines `program_name`, `program_birth_year` and
+  `show_help_default` just like `ffmpeg.c`, so its copies are renamed with `-D`
+  and both tools share one `cmdutils`. The link line comes from
+  `pkg-config --static` over FFmpeg's `.pc` files, and a version script
+  exports only `JNI_OnLoad` and the `Java_*` entry points.
+- **libaom on iOS**: ships toolchains for the device and the x86_64 simulator
+  only, so `build-ios.sh` writes its own for all three slices; SVE is disabled
+  because Apple's clang rejects the flags.
 - **openh264** is C++, so FFmpeg needs `--extra-libs=-lc++_shared` on Android
   and `-lc++` on iOS, plus `--pkg-config-flags=--static` to pick up the
   dependency from its `.pc` file.
 
 ## Testing a build
 
-The example app runs a 25-check suite covering encoding, muxing, trimming,
-filters, FFprobe, cancellation and protocols. Run it on a physical device for
+The example app runs a 30+-check suite covering encoding, muxing, trimming,
+filters, subtitles, AVIF, FFprobe, cancellation and protocols. Run it on a physical device for
 each platform; `npm run example:ios` and `npm run example:android` install it.
 
 Two environments cannot validate everything:

@@ -63,7 +63,7 @@ if [ ! -f "$PREFIX/lib/libmp3lame.a" ]; then
   unpack lame-3.100.tar.gz "lame-$SLICE"
   (
     cd "$DEPS/lame-$SLICE"
-    sed -i '' '/lame_init_old/d' include/libmp3lame.sym
+    sed -i.bak '/lame_init_old/d' include/libmp3lame.sym && rm -f include/libmp3lame.sym.bak
     ./configure --host="$HOST" --prefix="$PREFIX" --disable-shared --enable-static \
       --disable-frontend --disable-analyzer-hooks
     make -j"$JOBS" CFLAGS="$CFLAGS -include string.h -include stdlib.h -Wno-implicit-function-declaration"
@@ -125,6 +125,37 @@ EOF
       -Denable_tools=false -Denable_tests=false
     ninja -C build && ninja -C build install
   ) > "$WORKSPACE/build/dav1d-$SLICE.log" 2>&1
+fi
+
+# AVIF encoding (issue #6): libaom provides the AV1 encoder; dav1d keeps
+# decoding, so libaom's own decoder is compiled out. libaom ships toolchains
+# for the device and the x86_64 simulator only, so one file covers all three
+# slices the same way its own do.
+if [ ! -f "$PREFIX/lib/libaom.a" ]; then
+  echo "  libaom"
+  fetch "https://storage.googleapis.com/aom-releases/libaom-3.15.0.tar.gz" libaom-3.15.0.tar.gz
+  unpack libaom-3.15.0.tar.gz "libaom-$SLICE"
+  (
+    cd "$DEPS/libaom-$SLICE"
+    cat > toolchain-ios.cmake <<EOF
+set(CMAKE_SYSTEM_NAME Darwin)
+set(CMAKE_SYSTEM_PROCESSOR $ARCH)
+set(CMAKE_OSX_ARCHITECTURES $ARCH)
+set(CMAKE_OSX_SYSROOT $SDK)
+set(CMAKE_C_COMPILER $CC)
+set(CMAKE_CXX_COMPILER $CXX)
+set(CMAKE_C_FLAGS_INIT "-arch $ARCH $MIN_FLAG")
+set(CMAKE_CXX_FLAGS_INIT "-arch $ARCH $MIN_FLAG")
+set(CMAKE_EXE_LINKER_FLAGS_INIT "-arch $ARCH $MIN_FLAG")
+EOF
+    # Apple silicon has no SVE, and Apple's clang rejects the flags anyway.
+    cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE="$PWD/toolchain-ios.cmake" \
+      -DCMAKE_INSTALL_PREFIX="$PREFIX" -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_SHARED_LIBS=0 -DCONFIG_PIC=1 -DCONFIG_AV1_DECODER=0 \
+      -DENABLE_SVE=0 -DENABLE_SVE2=0 \
+      -DENABLE_EXAMPLES=0 -DENABLE_TESTS=0 -DENABLE_TOOLS=0 -DENABLE_DOCS=0
+    cmake --build build -j"$JOBS" && cmake --install build
+  ) > "$WORKSPACE/build/libaom-$SLICE.log" 2>&1
 fi
 
 if [ ! -f "$PREFIX/lib/libopenh264.a" ]; then
@@ -269,7 +300,8 @@ rm -rf "$BUILD"; mkdir -p "$BUILD"; cd "$BUILD"
   --enable-asm \
   --enable-videotoolbox --enable-audiotoolbox --enable-securetransport \
   --enable-zlib --enable-libmp3lame --enable-libopus --enable-libvpx \
-  --enable-libdav1d --enable-libopenh264 \
+  --enable-libdav1d --enable-libaom --disable-decoder=libaom_av1 \
+  --enable-libopenh264 \
   --enable-libass --enable-libfreetype --enable-libfribidi --enable-libharfbuzz \
   --enable-pthreads --enable-swscale --enable-avfilter --enable-network \
   --enable-protocol=file,pipe,http,tcp,https,tls,crypto,data,concat,concatf \

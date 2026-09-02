@@ -115,27 +115,30 @@
 - 🧪 **Capability discovery:** Ask the bundled build which encoders, decoders, muxers, demuxers, filters, and protocols it actually has
 - 💬 **Subtitle burn-in:** libass renders ASS/SSA and SRT subtitles — styling, positioning, outlines, shadows, and proper Arabic/Urdu shaping via HarfBuzz and FriBidi
 - 📎 **Soft subtitle embedding:** Mux SRT/ASS tracks into MKV or MP4 so players can toggle them without re-encoding the video
+- 🖼️ **AVIF and AV1:** libaom encodes AV1 video and AVIF stills, dav1d decodes them
+- 📦 **One native library per platform:** a single `libmunimffmpeg.so` per Android ABI and one static library in the iOS xcframework, so nothing else has to be linked, loaded, or packaged
 - 🎯 **TypeScript:** Complete public callback and result types
 - 🗂️ **16 KB Android pages:** Built with the alignment Google Play requires
 
 ## Platform support matrix
 
-| Capability                   | iOS             | Android         | Notes                                                                                                                                                   |
-| ---------------------------- | --------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| FFmpeg argument execution    | ✅              | ✅              | Commands run asynchronously through the native compatibility library.                                                                                   |
-| FFprobe argument execution   | ✅              | ✅              | Custom FFprobe arguments return `FFmpegSessionResult`.                                                                                                  |
-| Parsed media information     | ✅              | ✅              | `getMediaInformation()` returns parsed FFprobe JSON.                                                                                                    |
-| Log callback                 | ✅              | ✅              | Logs are delivered while a session is active.                                                                                                           |
-| Encoding-statistics callback | ✅              | ✅              | Available for FFmpeg execution.                                                                                                                         |
-| Immediate session ID         | ✅              | ✅              | `onSessionCreated` fires after the native session is created.                                                                                           |
-| Cancel one FFmpeg session    | ✅              | ✅              | Pass the positive safe-integer ID received by `execute`'s `onSessionCreated`. The native dependency does not expose FFprobe cancellation.               |
-| Cancel all FFmpeg sessions   | ✅              | ✅              | Use `cancelAll()` or call `cancel()` without an ID.                                                                                                     |
-| Expo Go                      | ❌              | ❌              | A native development build is required.                                                                                                                 |
-| Capability discovery         | ✅              | ✅              | `listEncoders()`, `listDecoders()`, `listMuxers()`, `listDemuxers()`, `listFilters()`, `listProtocols()`, and `pickEncoder()` report what the bundled build supports. |
-| Subtitle burn-in             | ✅              | ✅              | libass with system fonts: Core Text on iOS, fontconfig over `/system/fonts` on Android.                                                                  |
-| H.264 encoding               | VideoToolbox    | MediaCodec      | Hardware on both, `libopenh264` as the software fallback; use `pickEncoder(['h264_videotoolbox', 'h264_mediacodec', 'libopenh264'])` instead of hard-coding an encoder. |
-| Remote HTTP(S) inputs        | ✅              | ✅              | iOS links SecureTransport, Android links mbedTLS. Remote server behaviour still varies; prefer local files for predictable app workflows.                 |
-| Soft subtitle embedding      | ✅              | ✅              | Mux SRT/ASS as toggleable tracks (MKV: `srt`/`ass`, MP4: `mov_text`).                                                                 |
+| Capability                   | iOS          | Android    | Notes                                                                                                                                                                   |
+| ---------------------------- | ------------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FFmpeg argument execution    | ✅           | ✅         | Commands run asynchronously through the native compatibility library.                                                                                                   |
+| FFprobe argument execution   | ✅           | ✅         | Custom FFprobe arguments return `FFmpegSessionResult`.                                                                                                                  |
+| Parsed media information     | ✅           | ✅         | `getMediaInformation()` returns parsed FFprobe JSON.                                                                                                                    |
+| Log callback                 | ✅           | ✅         | Logs are delivered while a session is active.                                                                                                                           |
+| Encoding-statistics callback | ✅           | ✅         | Available for FFmpeg execution.                                                                                                                                         |
+| Immediate session ID         | ✅           | ✅         | `onSessionCreated` fires after the native session is created.                                                                                                           |
+| Cancel one FFmpeg session    | ✅           | ✅         | Pass the positive safe-integer ID received by `execute`'s `onSessionCreated`. The native dependency does not expose FFprobe cancellation.                               |
+| Cancel all FFmpeg sessions   | ✅           | ✅         | Use `cancelAll()` or call `cancel()` without an ID.                                                                                                                     |
+| Expo Go                      | ❌           | ❌         | A native development build is required.                                                                                                                                 |
+| Capability discovery         | ✅           | ✅         | `listEncoders()`, `listDecoders()`, `listMuxers()`, `listDemuxers()`, `listFilters()`, `listProtocols()`, and `pickEncoder()` report what the bundled build supports.   |
+| Subtitle burn-in             | ✅           | ✅         | libass with system fonts: Core Text on iOS, fontconfig over `/system/fonts` on Android.                                                                                 |
+| H.264 encoding               | VideoToolbox | MediaCodec | Hardware on both, `libopenh264` as the software fallback; use `pickEncoder(['h264_videotoolbox', 'h264_mediacodec', 'libopenh264'])` instead of hard-coding an encoder. |
+| Remote HTTP(S) inputs        | ✅           | ✅         | iOS links SecureTransport, Android links mbedTLS. Remote server behaviour still varies; prefer local files for predictable app workflows.                               |
+| Soft subtitle embedding      | ✅           | ✅         | Mux SRT/ASS as toggleable tracks (MKV: `srt`/`ass`, MP4: `mov_text`).                                                                                                   |
+| AVIF / AV1 encoding          | ✅           | ✅         | `libaom-av1` encodes (add `-still-picture 1 -f avif` for images); `libdav1d` decodes.                                                                                   |
 
 Codec availability is determined by the native FFmpeg builds described in [Bundled FFmpeg builds](#bundled-ffmpeg-builds). Do not assume every FFmpeg codec or external library is present.
 
@@ -143,14 +146,14 @@ Codec availability is determined by the native FFmpeg builds described in [Bundl
 
 Every release runs the example's 25-check device suite. For 0.4.x:
 
-| Target | Result |
-| --- | --- |
-| iPad Air (M3), iOS 26 | 25/25 |
-| iOS Simulator, arm64 | 25/25 |
-| Galaxy A14 5G, arm64-v8a | 25/25 |
-| Android emulator, arm64 | Software encoding passes; hardware encoding does not — see below |
-| Android emulator, `x86_64` | Same: `libopenh264` passes, MediaCodec does not |
-| Android `armeabi-v7a` | Built and statically checked, not executed |
+| Target                     | Result                                                           |
+| -------------------------- | ---------------------------------------------------------------- |
+| iPad Air (M3), iOS 26      | 25/25                                                            |
+| iOS Simulator, arm64       | 25/25                                                            |
+| Galaxy A14 5G, arm64-v8a   | 25/25                                                            |
+| Android emulator, arm64    | Software encoding passes; hardware encoding does not — see below |
+| Android emulator, `x86_64` | Same: `libopenh264` passes, MediaCodec does not                  |
+| Android `armeabi-v7a`      | Built and statically checked, not executed                       |
 
 `x86_64` was verified on an Intel Windows machine, since the Android emulator refuses non-native system images on Apple Silicon: FFmpeg 9.0.1, 185 encoders, and the software H.264 encode passes. `armeabi-v7a` has no hardware to hand, so it was checked statically instead — correct ELF architecture, the expected JNI exports, only system libraries unresolved, and the same FFmpeg and codec set as arm64.
 
@@ -160,11 +163,20 @@ An Android emulator has no working MediaCodec **encoder**. `h264_mediacodec` and
 
 This is an emulator limitation, not a package one, but it is worth knowing before debugging: **test video encoding on a physical device**.
 
-`pickEncoder` cannot detect it, because MediaCodec *is* present in an emulator — it just does not work. When you need encoding to succeed regardless of environment, ask for the software encoder by name:
+`pickEncoder` cannot detect it, because MediaCodec _is_ present in an emulator — it just does not work. When you need encoding to succeed regardless of environment, ask for the software encoder by name:
 
 ```typescript
 // Deterministic anywhere: emulators, CI, older devices.
-await execute(['-y', '-i', input, '-c:v', 'libopenh264', '-pix_fmt', 'yuv420p', output])
+await execute([
+  '-y',
+  '-i',
+  input,
+  '-c:v',
+  'libopenh264',
+  '-pix_fmt',
+  'yuv420p',
+  output,
+])
 ```
 
 `libopenh264`, `mpeg4` and `libvpx-vp9` are all software encoders and work everywhere.
@@ -173,17 +185,20 @@ await execute(['-y', '-i', input, '-c:v', 'libopenh264', '-pix_fmt', 'yuv420p', 
 
 Both platforms run **FFmpeg 9.0.1**, built from [ffmpeg.org](https://www.ffmpeg.org/) by the scripts in [`scripts/ffmpeg/`](./scripts/ffmpeg). There is no FFmpegKit here: that project was retired in 2025 and pinned to FFmpeg 6.0.
 
-| | iOS | Android |
-| --- | --- | --- |
-| FFmpeg | 9.0.1 | 9.0.1 |
-| Architectures | arm64 device, arm64 + x86_64 simulator | arm64-v8a, armeabi-v7a, x86_64 |
-| Hardware codecs | VideoToolbox, AudioToolbox | MediaCodec |
-| TLS | SecureTransport | mbedTLS |
-| Minimum | iOS 15.1 | API 24, 16 KB pages |
+|                 | iOS                                                     | Android                         |
+| --------------- | ------------------------------------------------------- | ------------------------------- |
+| FFmpeg          | 9.0.1                                                   | 9.0.1                           |
+| Architectures   | arm64 device, arm64 + x86_64 simulator                  | arm64-v8a, armeabi-v7a, x86_64  |
+| Hardware codecs | VideoToolbox, AudioToolbox                              | MediaCodec                      |
+| TLS             | SecureTransport                                         | mbedTLS                         |
+| Minimum         | iOS 15.1                                                | API 24, 16 KB pages             |
+| Ships as        | `MunimFFmpeg.xcframework`, one static library per slice | one `libmunimffmpeg.so` per ABI |
 
-Linked libraries, identical on both: **LAME** (MP3), **Opus**, **libvpx** (VP8/VP9), **dav1d** (AV1 decoding), **openh264** (software H.264), **libass** with **FreeType**, **HarfBuzz**, and **FriBidi** (subtitle rendering and text shaping), plus everything FFmpeg builds natively. Android additionally links **fontconfig** and **expat** so libass can discover the system fonts; iOS uses Core Text for the same job.
+Linked libraries, identical on both: **LAME** (MP3), **Opus**, **libvpx** (VP8/VP9), **dav1d** (AV1 decoding), **libaom** (AV1 and AVIF encoding), **openh264** (software H.264), **libass** with **FreeType**, **HarfBuzz**, and **FriBidi** (subtitle rendering and text shaping), plus everything FFmpeg builds natively. Android additionally links **fontconfig** and **expat** so libass can discover the system fonts; iOS uses Core Text for the same job.
 
 FFmpeg's own `ffmpeg` and `ffprobe` tools are compiled to run inside your app process, so the argument arrays you pass are handled by the real command-line code paths rather than a reimplementation.
+
+Everything above is linked statically into a single library per platform: FFmpeg, both tools, the core, and every external library. On Android that is one `libmunimffmpeg.so` per ABI whose only dependencies are the system libraries and the `libc++_shared.so` React Native already bundles; on iOS it is one static library per slice inside `MunimFFmpeg.xcframework`. Only the JNI entry points are exported on Android, so the bundled FFmpeg cannot collide with another copy an app might carry.
 
 ### Encoders
 
@@ -191,12 +206,13 @@ Verified by running the example's device suite: iOS reports 187 encoders, Androi
 
 H.264 and HEVC come from the platform's hardware encoder, which is faster and uses less power than a software encoder. `libopenh264` is there as a software H.264 fallback for anywhere hardware encoding is unavailable — an emulator, for instance:
 
-| Encoder | iOS | Android |
-| --- | --- | --- |
-| `h264_videotoolbox`, `hevc_videotoolbox`, `prores_videotoolbox` | ✅ | ❌ |
-| `h264_mediacodec`, `hevc_mediacodec`, `vp8_mediacodec`, `vp9_mediacodec` | ❌ | ✅ |
-| `aac_at`, `alac_at` (AudioToolbox) | ✅ | ❌ |
-| `libopenh264` (H.264, software) | ✅ | ✅ |
+| Encoder                                                                  | iOS | Android |
+| ------------------------------------------------------------------------ | --- | ------- |
+| `h264_videotoolbox`, `hevc_videotoolbox`, `prores_videotoolbox`          | ✅  | ❌      |
+| `h264_mediacodec`, `hevc_mediacodec`, `vp8_mediacodec`, `vp9_mediacodec` | ❌  | ✅      |
+| `aac_at`, `alac_at` (AudioToolbox)                                       | ✅  | ❌      |
+| `libopenh264` (H.264, software)                                          | ✅  | ✅      |
+| `libaom-av1` (AV1, software; AVIF stills)                                | ✅  | ✅      |
 
 Resolve the name at runtime instead of branching on `Platform.OS`:
 
@@ -216,7 +232,7 @@ await execute(['-y', '-i', inputPath, '-c:v', h264, outputPath])
 
 Two things to know about hardware encoders: they want NV12 input on Android (`-pix_fmt nv12`) and planar YUV on iOS, and they reject very small frames — 176×144 is the smallest size that works everywhere.
 
-Decoding is uniform: H.264, HEVC, VP8/VP9, AV1, MPEG-4, MP3, AAC, Vorbis, Opus, FLAC and the usual containers, on both platforms. Both link TLS, so `https://` inputs work.
+Decoding is uniform: H.264, HEVC, VP8/VP9, AV1 (via dav1d, including AVIF images), MPEG-4, MP3, AAC, Vorbis, Opus, FLAC and the usual containers, on both platforms. Both link TLS, so `https://` inputs work.
 
 ## 📦 Installation
 
@@ -281,7 +297,7 @@ You can also create an [EAS development build](https://docs.expo.dev/develop/dev
 
 ### Native binaries
 
-The FFmpeg libraries are around 200 MB across all six architectures, which does not belong in an npm tarball, so they are downloaded from the matching GitHub release when the package installs and verified against the checksum in `scripts/binaries.json`.
+The FFmpeg libraries are well over 100 MB across all six architectures, which does not belong in an npm tarball, so they are downloaded from the matching GitHub release when the package installs and verified against the checksum in `scripts/binaries.json`.
 
 If your environment blocks install scripts (`npm install --ignore-scripts`), fetch them explicitly:
 
@@ -569,7 +585,11 @@ if (!result.success) {
 ```typescript
 import { execute, pickEncoder } from 'munim-ffmpeg'
 
-const encoder = await pickEncoder(['h264_videotoolbox', 'h264_mediacodec', 'libopenh264'])
+const encoder = await pickEncoder([
+  'h264_videotoolbox',
+  'h264_mediacodec',
+  'libopenh264',
+])
 if (!encoder) throw new Error('No H.264 encoder available in this build')
 
 // MediaCodec wants NV12 input; the others take planar YUV.
@@ -610,6 +630,39 @@ const result = await execute([
 ])
 ```
 
+### Write an AVIF still
+
+AVIF is AV1 in an image container. `libaom-av1` encodes it; `-still-picture 1` switches the encoder into single-image mode and `-f avif` picks the container. Decoding an AVIF back — or any AV1 video — goes through dav1d automatically.
+
+```typescript
+await execute([
+  '-y',
+  '-ss',
+  '1.5',
+  '-i',
+  inputPath,
+  '-frames:v',
+  '1',
+  '-vf',
+  'scale=-2:720',
+  '-c:v',
+  'libaom-av1',
+  '-still-picture',
+  '1',
+  '-cpu-used',
+  '6', // 0 (slowest, best) … 8 (fastest)
+  '-crf',
+  '28', // quality; lower is larger
+  '-pix_fmt',
+  'yuv420p',
+  '-f',
+  'avif',
+  outputPath, // ends in .avif
+])
+```
+
+React Native's `<Image>` displays AVIF natively on iOS 16+ and Android 12+.
+
 ### Burn subtitles into a video
 
 The bundled builds include libass with FreeType, HarfBuzz, and FriBidi, so ASS/SSA styling and complex scripts (Arabic, Urdu, and other RTL or shaped text) render correctly. System fonts are found automatically — through Core Text on iOS and through fontconfig scanning `/system/fonts` on Android.
@@ -621,18 +674,24 @@ import { execute, normalizePath } from 'munim-ffmpeg'
 // shadows, positioning, karaoke — everything the format supports.
 await execute([
   '-y',
-  '-i', inputPath,
-  '-vf', `ass=filename=${normalizePath(subtitlePath)}`,
-  '-c:a', 'copy',
+  '-i',
+  inputPath,
+  '-vf',
+  `ass=filename=${normalizePath(subtitlePath)}`,
+  '-c:a',
+  'copy',
   outputPath,
 ])
 
 // SRT can be styled at burn time with force_style.
 await execute([
   '-y',
-  '-i', inputPath,
-  '-vf', `subtitles=filename=${normalizePath(srtPath)}:force_style='Fontsize=28,PrimaryColour=&H00FFFF00,Outline=2'`,
-  '-c:a', 'copy',
+  '-i',
+  inputPath,
+  '-vf',
+  `subtitles=filename=${normalizePath(srtPath)}:force_style='Fontsize=28,PrimaryColour=&H00FFFF00,Outline=2'`,
+  '-c:a',
+  'copy',
   outputPath,
 ])
 ```
@@ -649,16 +708,41 @@ import { execute } from 'munim-ffmpeg'
 // Bundle one video, two audio languages, and a subtitle track into MKV.
 await execute([
   '-y',
-  '-i', videoPath, '-i', urduAudioPath, '-i', subtitlePath,
-  '-map', '0:v:0', '-map', '0:a:0', '-map', '1:a:0', '-map', '2:s:0',
-  '-c:v', 'copy', '-c:a', 'aac', '-c:s', 'srt',
-  '-metadata:s:a:1', 'language=urd',
+  '-i',
+  videoPath,
+  '-i',
+  urduAudioPath,
+  '-i',
+  subtitlePath,
+  '-map',
+  '0:v:0',
+  '-map',
+  '0:a:0',
+  '-map',
+  '1:a:0',
+  '-map',
+  '2:s:0',
+  '-c:v',
+  'copy',
+  '-c:a',
+  'aac',
+  '-c:s',
+  'srt',
+  '-metadata:s:a:1',
+  'language=urd',
   outputMkvPath,
 ])
 
 // Extract the second audio track without re-encoding.
 await execute([
-  '-y', '-i', outputMkvPath, '-map', '0:a:1', '-c', 'copy', trackPath,
+  '-y',
+  '-i',
+  outputMkvPath,
+  '-map',
+  '0:a:1',
+  '-c',
+  'copy',
+  trackPath,
 ])
 ```
 
@@ -672,22 +756,60 @@ import { execute } from 'munim-ffmpeg'
 // MKV with English SRT and styled Urdu ASS tracks, video and audio untouched.
 await execute([
   '-y',
-  '-i', videoPath, '-i', englishSrtPath, '-i', urduAssPath,
-  '-map', '0:v:0', '-map', '0:a:0', '-map', '1:0', '-map', '2:0',
-  '-c:v', 'copy', '-c:a', 'copy',
-  '-c:s:0', 'srt', '-c:s:1', 'ass',
-  '-metadata:s:s:0', 'language=eng', '-metadata:s:s:0', 'title=English',
-  '-metadata:s:s:1', 'language=urd', '-metadata:s:s:1', 'title=Urdu',
+  '-i',
+  videoPath,
+  '-i',
+  englishSrtPath,
+  '-i',
+  urduAssPath,
+  '-map',
+  '0:v:0',
+  '-map',
+  '0:a:0',
+  '-map',
+  '1:0',
+  '-map',
+  '2:0',
+  '-c:v',
+  'copy',
+  '-c:a',
+  'copy',
+  '-c:s:0',
+  'srt',
+  '-c:s:1',
+  'ass',
+  '-metadata:s:s:0',
+  'language=eng',
+  '-metadata:s:s:0',
+  'title=English',
+  '-metadata:s:s:1',
+  'language=urd',
+  '-metadata:s:s:1',
+  'title=Urdu',
   outputMkvPath,
 ])
 
 // MP4 needs mov_text instead.
 await execute([
   '-y',
-  '-i', videoPath, '-i', subtitlePath,
-  '-map', '0:v:0', '-map', '0:a:0', '-map', '1:0',
-  '-c:v', 'copy', '-c:a', 'copy', '-c:s', 'mov_text',
-  '-metadata:s:s:0', 'language=eng',
+  '-i',
+  videoPath,
+  '-i',
+  subtitlePath,
+  '-map',
+  '0:v:0',
+  '-map',
+  '0:a:0',
+  '-map',
+  '1:0',
+  '-c:v',
+  'copy',
+  '-c:a',
+  'copy',
+  '-c:s',
+  'mov_text',
+  '-metadata:s:s:0',
+  'language=eng',
   outputMp4Path,
 ])
 ```
@@ -746,9 +868,9 @@ if (result.success) {
 
 The JavaScript, TypeScript, Swift, Kotlin, C core, and generated Nitro bridge in this repository are Apache-2.0.
 
-The bundled FFmpeg 9.0.1 is **LGPLv3**, on both platforms. It is configured without `--enable-gpl`, so no x264, x265, xvid, or vid.stab. The external libraries it links are LAME (LGPL), Opus (BSD), libvpx (BSD), dav1d (BSD), openh264 (BSD 2-clause), libass (ISC), FreeType (FTL, BSD-style with credit), HarfBuzz (MIT-style), FriBidi (LGPL), and, on Android only, mbedTLS (Apache-2.0), fontconfig (MIT-style), and expat (MIT). None of them change the LGPL story.
+The bundled FFmpeg 9.0.1 is **LGPLv3**, on both platforms. It is configured without `--enable-gpl`, so no x264, x265, xvid, or vid.stab. The external libraries it links are LAME (LGPL), Opus (BSD), libvpx (BSD), dav1d (BSD), libaom (BSD 2-clause with the Alliance for Open Media patent licence), openh264 (BSD 2-clause), libass (ISC), FreeType (FTL, BSD-style with credit), HarfBuzz (MIT-style), FriBidi (LGPL), and, on Android only, mbedTLS (Apache-2.0), fontconfig (MIT-style), and expat (MIT). None of them change the LGPL story.
 
-> **A note on H.264 patents.** Hardware encoders are covered by the licences device manufacturers already pay for. Software H.264 encoding through `libopenh264` is not: Cisco's royalty coverage applies to *their* prebuilt binary, and this package builds openh264 from source. If you ship software H.264 encoding at scale, check where you stand with AVC licensing. Hardware encoders avoid the question entirely, which is why `pickEncoder` should list them first.
+> **A note on H.264 patents.** Hardware encoders are covered by the licences device manufacturers already pay for. Software H.264 encoding through `libopenh264` is not: Cisco's royalty coverage applies to _their_ prebuilt binary, and this package builds openh264 from source. If you ship software H.264 encoding at scale, check where you stand with AVC licensing. Hardware encoders avoid the question entirely, which is why `pickEncoder` should list them first.
 
 In practice that means your application does **not** inherit GPL obligations. LGPL still applies: the FFmpeg libraries are linked and their license and notices must be conveyed with your app, and users must be able to relink against a modified FFmpeg. The exact configuration used is recorded in [`scripts/ffmpeg/build-ios.sh`](./scripts/ffmpeg/build-ios.sh) and [`build-android.sh`](./scripts/ffmpeg/build-android.sh), and the binaries can be reproduced from them.
 
@@ -807,7 +929,10 @@ Nitrogen output under `nitrogen/generated` is committed. Change the `.nitro.ts` 
 
 ### Example app
 
-`example/` is an Expo app that runs a 25-check device suite: H.264 and HEVC encoding, VP9/Opus in WebM, MP3, AAC, scaling and multi-step filter graphs, software H.264 via openh264, muxing, demuxing, trimming, concatenation, thumbnails, audio resampling, awkward file paths, concurrent sessions, single and global cancellation, protocol support, and both failure paths. Fixtures are generated in JavaScript, so the suite needs no network or bundled media. Results are rendered on screen, written to `munim-ffmpeg-suite.json` in the app's document directory, and logged as `MUNIM_FFMPEG_SUITE_RESULT`.
+`example/` is an Expo SDK 57 app — a development build, since Expo Go cannot load native modules — with two screens:
+
+- **Playground** picks a video with `expo-document-picker` (or generates one from JavaScript fixtures), inspects it, transcodes it through the device's hardware H.264 encoder via `pickEncoder`, writes an AVIF still, embeds soft subtitles into an MKV, burns them in with libass, and shows progress from the statistics callback with a cancel button wired to `onSessionCreated`. Each action is a plain argument array, so [`example/Playground.tsx`](./example/Playground.tsx) doubles as a recipe book.
+- **Device suite** runs the 30+ checks used to verify every release: H.264 and HEVC encoding, VP9/Opus in WebM, MP3, AAC, AVIF, scaling and multi-step filter graphs, software H.264 via openh264, subtitle burn-in and embedding, muxing, demuxing, trimming, concatenation, thumbnails, audio resampling, awkward file paths, concurrent sessions, single and global cancellation, protocol support, and both failure paths. It runs on launch, renders each result, writes `munim-ffmpeg-suite.json` to the app's document directory, and logs it as `MUNIM_FFMPEG_SUITE_RESULT`.
 
 ```bash
 npm run example:ios
@@ -815,7 +940,7 @@ npm run example:ios
 npm run example:android
 ```
 
-FFmpeg encoding is slow in a simulator or emulator; run the suite on a physical device.
+FFmpeg encoding is slow in a simulator or emulator, and emulators have no working hardware encoder; run it on a physical device. [`example/README.md`](./example/README.md) has the details.
 
 ### Rebuilding FFmpeg
 
@@ -828,14 +953,16 @@ See [`scripts/ffmpeg/README.md`](./scripts/ffmpeg/README.md) for what the build 
 
 ### Releasing
 
-Releases run locally from a clean `main`; this repository does not use GitHub Actions.
+Releases run locally from a clean `main`:
 
 ```bash
 npm run check
 npm run release:local
 ```
 
-`release:local` runs semantic-release with the npm token from the macOS Keychain and the GitHub CLI token, so commit messages must follow Conventional Commits. It also uploads `dist-binaries/munim-ffmpeg-binaries.tar.gz` to the GitHub release, which is where `postinstall` fetches it from — so run `npm run binaries:package` first.
+`release:local` runs semantic-release with the npm token from the macOS Keychain and the GitHub CLI token, so commit messages must follow Conventional Commits. It also uploads `dist-binaries/munim-ffmpeg-binaries.tar.gz` and `build-info.txt` to the GitHub release, which is where `postinstall` fetches the binaries from — so run `npm run binaries:package` first.
+
+Two GitHub Actions workflows back this up: `CI` checks the JavaScript surface on every push and pull request, and `Build binaries` compiles every iOS and Android slice in parallel, on demand or when a pull request touches `scripts/ffmpeg/`, and can attach the result to a release. See [`scripts/ffmpeg/README.md`](./scripts/ffmpeg/README.md#building-in-github-actions).
 
 ## 👏 Contributing
 

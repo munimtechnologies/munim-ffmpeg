@@ -2,8 +2,8 @@
 /*
  * Downloads the prebuilt FFmpeg binaries for this version of munim-ffmpeg.
  *
- * They are not published to npm: the bundle is ~200 MB of static libraries and
- * shared objects, which does not belong in a registry tarball. It ships as a
+ * They are not published to npm: the bundle is well over 100 MB of static
+ * libraries and shared objects, which does not belong in a registry tarball. It ships as a
  * GitHub release asset instead, pinned by the checksum in scripts/binaries.json
  * so a build cannot silently pick up different bytes.
  *
@@ -27,7 +27,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const REPOSITORY = 'munimtechnologies/munim-ffmpeg'
 const MARKERS = [
   'ios/MunimFFmpeg.xcframework',
-  'android/src/main/jniLibs/arm64-v8a/libmunimffmpeg9.so',
+  'android/src/main/jniLibs/arm64-v8a/libmunimffmpeg.so',
 ]
 
 async function exists(target) {
@@ -90,6 +90,14 @@ async function main() {
     )
   }
 
+  // A previous version may have left different files behind (older releases
+  // shipped several .so files per ABI), so the targets start empty.
+  for (const target of [
+    'ios/MunimFFmpeg.xcframework',
+    'android/src/main/jniLibs',
+  ]) {
+    await rm(path.join(root, target), { force: true, recursive: true })
+  }
   await run('tar', ['xzf', archive, '-C', root])
   await rm(cache, { force: true, recursive: true })
 

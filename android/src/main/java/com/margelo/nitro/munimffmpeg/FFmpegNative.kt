@@ -67,7 +67,7 @@ class FFmpegSession(
 object FFmpegNative {
   init {
     configureFontconfig()
-    System.loadLibrary("munimffmpeg9")
+    System.loadLibrary("munimffmpeg")
   }
 
   /** Return code the tools report when a run was cancelled. */

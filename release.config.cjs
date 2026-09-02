@@ -60,6 +60,10 @@ module.exports = {
             path: 'dist-binaries/munim-ffmpeg-binaries.tar.gz',
             label: 'Prebuilt FFmpeg binaries (iOS + Android)',
           },
+          {
+            path: 'dist-binaries/build-info.txt',
+            label: 'Build information (enabled components per platform)',
+          },
         ],
       },
     ],

@@ -567,6 +567,79 @@ export async function runSuite(
   )
 
   record(
+    await run('Encodes and decodes an AVIF image', async () => {
+      // libaom encodes (issue #6); dav1d decodes, so the round trip exercises
+      // both AV1 libraries and the AVIF muxer/demuxer in between.
+      const encoders = await listEncoders()
+      assert(encoders.includes('libaom-av1'), 'libaom-av1 encoder missing')
+
+      const avif = new File(directory, 'thumbnail.avif')
+      const result = await execute([
+        '-y',
+        '-hide_banner',
+        '-ss',
+        '0.3',
+        '-i',
+        video.uri,
+        '-frames:v',
+        '1',
+        '-c:v',
+        'libaom-av1',
+        '-still-picture',
+        '1',
+        '-cpu-used',
+        '8',
+        '-crf',
+        '28',
+        '-pix_fmt',
+        'yuv420p',
+        '-f',
+        'avif',
+        avif.uri,
+      ])
+      assert(result.success, result.failStackTrace ?? result.output)
+      assert((avif.size ?? 0) > 0, 'no avif written')
+
+      const information = (await getMediaInformation(
+        avif.uri
+      )) as MediaInformation
+      const stream = information.streams?.[0]
+      assert(
+        stream?.codec_name === 'av1',
+        `expected av1, got ${stream?.codec_name}`
+      )
+      assert(
+        stream.width === RAW_WIDTH && stream.height === RAW_HEIGHT,
+        `expected ${RAW_WIDTH}x${RAW_HEIGHT}, got ${stream.width}x${stream.height}`
+      )
+
+      const logs: string[] = []
+      const decoded = await execute(
+        [
+          '-hide_banner',
+          '-c:v',
+          'libdav1d',
+          '-i',
+          avif.uri,
+          '-vf',
+          'signalstats,metadata=mode=print:key=lavfi.signalstats.YAVG',
+          '-f',
+          'null',
+          '-',
+        ],
+        (message) => logs.push(message)
+      )
+      assert(decoded.success, decoded.failStackTrace ?? decoded.output)
+      const luma = /YAVG=([0-9.]+)/.exec(
+        `${logs.join('')}${decoded.output}`
+      )?.[1]
+      assert(luma !== undefined, 'dav1d decoded no frame')
+      assert(Number(luma) > 16, `decoded frame is black (YAVG ${luma})`)
+      return `${avif.size} bytes avif, decoded by dav1d with YAVG ${Number(luma).toFixed(1)}`
+    })
+  )
+
+  record(
     await run('Encodes VP9 and Opus into WebM', async () => {
       const webm = new File(directory, 'clip.webm')
       const result = await execute([

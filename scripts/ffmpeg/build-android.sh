@@ -10,7 +10,8 @@
 set -euo pipefail
 
 ABI="${1:-arm64-v8a}"
-NDK="${ANDROID_NDK:-/opt/homebrew/share/android-commandlinetools/ndk/27.1.12297006}"
+# GitHub-hosted runners export ANDROID_NDK_LATEST_HOME; local machines set ANDROID_NDK.
+NDK="${ANDROID_NDK:-${ANDROID_NDK_HOME:-${ANDROID_NDK_LATEST_HOME:-/opt/homebrew/share/android-commandlinetools/ndk/27.1.12297006}}}"
 API="${ANDROID_API:-24}"
 HOST_TAG="$(ls "$NDK/toolchains/llvm/prebuilt" | head -1)"
 TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/$HOST_TAG"
@@ -52,7 +53,9 @@ export AR="$TOOLCHAIN/bin/llvm-ar"
 export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
 export STRIP="$TOOLCHAIN/bin/llvm-strip"
 export NM="$TOOLCHAIN/bin/llvm-nm"
-export CFLAGS="-O2 -fPIC -DANDROID $EXTRA_CFLAGS"
+# Everything links into one shared library, so unused functions can be
+# discarded at the final link (--gc-sections) instead of shipping.
+export CFLAGS="-O2 -fPIC -DANDROID -ffunction-sections -fdata-sections $EXTRA_CFLAGS"
 export CXXFLAGS="$CFLAGS"
 export LDFLAGS="-Wl,-z,max-page-size=16384"
 
@@ -70,7 +73,8 @@ if [ ! -f "$PREFIX/lib/libmp3lame.a" ]; then
   unpack lame-3.100.tar.gz "lame-$ABI"
   (
     cd "$DEPS/lame-$ABI"
-    sed -i '' '/lame_init_old/d' include/libmp3lame.sym
+    # -i.bak rather than -i '' so the same line works with GNU and BSD sed.
+    sed -i.bak '/lame_init_old/d' include/libmp3lame.sym && rm -f include/libmp3lame.sym.bak
     ./configure --host="$HOST" --prefix="$PREFIX" --disable-shared --enable-static \
       --disable-frontend --disable-analyzer-hooks
     # LAME predates C99 and relies on implicit declarations. The force-includes
@@ -138,6 +142,25 @@ EOF
       -Denable_tools=false -Denable_tests=false
     ninja -C build && ninja -C build install
   ) > "$WORKSPACE/build/dav1d-$ABI.log" 2>&1
+fi
+
+# AVIF encoding (issue #6): libaom provides the AV1 encoder. Decoding stays
+# with dav1d, which is faster, so libaom's own decoder is compiled out.
+if [ ! -f "$PREFIX/lib/libaom.a" ]; then
+  echo "  libaom"
+  fetch "https://storage.googleapis.com/aom-releases/libaom-3.15.0.tar.gz" libaom-3.15.0.tar.gz
+  unpack libaom-3.15.0.tar.gz "libaom-$ABI"
+  (
+    cd "$DEPS/libaom-$ABI"
+    # libaom's own Android toolchain wraps the NDK's and picks the assembler.
+    cmake -S . -B build \
+      -DCMAKE_TOOLCHAIN_FILE="$(find . -path '*cmake/toolchains/android.cmake' | head -1)" \
+      -DAOM_ANDROID_NDK_PATH="$NDK" -DANDROID_ABI="$ABI" -DANDROID_PLATFORM="android-$API" \
+      -DCMAKE_INSTALL_PREFIX="$PREFIX" -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_SHARED_LIBS=0 -DCONFIG_PIC=1 -DCONFIG_AV1_DECODER=0 \
+      -DENABLE_EXAMPLES=0 -DENABLE_TESTS=0 -DENABLE_TOOLS=0 -DENABLE_DOCS=0
+    cmake --build build -j"$JOBS" && cmake --install build
+  ) > "$WORKSPACE/build/libaom-$ABI.log" 2>&1
 fi
 
 if [ ! -f "$PREFIX/lib/libopenh264.a" ]; then
@@ -348,11 +371,12 @@ rm -rf "$BUILD"; mkdir -p "$BUILD"; cd "$BUILD"
   --extra-libs="-lc++_shared" \
   --pkg-config-flags=--static \
   --disable-autodetect \
-  --enable-shared --disable-static --enable-pic \
+  --enable-static --disable-shared --enable-pic \
   --enable-asm --enable-inline-asm \
   --enable-jni --enable-mediacodec \
   --enable-zlib --enable-libmp3lame --enable-libopus --enable-libvpx \
-  --enable-libdav1d --enable-libopenh264 --enable-mbedtls --enable-version3 \
+  --enable-libdav1d --enable-libaom --disable-decoder=libaom_av1 \
+  --enable-libopenh264 --enable-mbedtls --enable-version3 \
   --enable-libass --enable-libfreetype --enable-libfribidi --enable-libharfbuzz \
   --enable-libfontconfig \
   --enable-pthreads --enable-swscale --enable-avfilter --enable-network \
