@@ -45,7 +45,7 @@
     "specs": "npm run codegen",
     "build": "npm run typecheck && tsc",
     "prepack": "npm run build",
-    "check": "npm run codegen && npm run typecheck && npm run typecheck:example && npm run build && npm pack --dry-run",
+    "check": "npm run codegen && npm run typecheck && npm run build && npm run typecheck:example && npm pack --dry-run",
     "example:start": "npm --workspace example run start",
     "example:ios": "npm --workspace example run ios",
     "example:android": "npm --workspace example run android",
@@ -119,7 +119,7 @@
     "prettier": "^3.8.3",
     "react": "19.2.3",
     "react-native": "0.86.2",
-    "react-native-nitro-modules": "^0.36.5",
+    "react-native-nitro-modules": "0.36.5",
     "semantic-release": "^25.0.9",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.46.0"
