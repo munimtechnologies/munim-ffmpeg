@@ -4,6 +4,9 @@ import androidx.annotation.Keep
 import com.facebook.proguard.annotations.DoNotStrip
 import com.margelo.nitro.core.Promise
 import java.io.File
+import java.util.concurrent.Executors
+import java.util.concurrent.ThreadFactory
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 @Keep
@@ -15,6 +18,25 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
   private val sessions = AtomicLong(0)
 
   private fun nextSession() = sessions.incrementAndGet().toDouble()
+
+  /**
+   * Runs [block] on a dedicated FFmpeg thread and settles a [Promise] with its
+   * outcome. Nitro's `Promise.async` shares Kotlin's default coroutine pool,
+   * which only has one thread per CPU core: a multi-minute transcode plus a
+   * few queued sessions would park the whole pool and starve every other
+   * coroutine in the app. FFmpeg work therefore gets its own unbounded pool.
+   */
+  private fun <T> runOnFfmpegThread(block: () -> T): Promise<T> {
+    val promise = Promise<T>()
+    executor.execute {
+      try {
+        promise.resolve(block())
+      } catch (error: Throwable) {
+        promise.reject(error)
+      }
+    }
+    return promise
+  }
 
   private fun result(
     sessionId: Double,
@@ -52,7 +74,7 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
     val sessionId = nextSession()
     onSessionCreated?.invoke(sessionId)
 
-    return Promise.async {
+    return runOnFfmpegThread {
       val startedAt = System.currentTimeMillis()
       // ffmpeg prints reports such as -encoders and -protocols to stdout rather
       // than through its logger, so it is captured to a file and appended.
@@ -79,7 +101,7 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
     val sessionId = nextSession()
     onSessionCreated?.invoke(sessionId)
 
-    return Promise.async {
+    return runOnFfmpegThread {
       val startedAt = System.currentTimeMillis()
       val (returnCode, report) = runProbe(arguments_, onLog)
       result(sessionId, returnCode, report, System.currentTimeMillis() - startedAt)
@@ -87,7 +109,7 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
   }
 
   override fun getMediaInformation(path: String): Promise<String> {
-    return Promise.async {
+    return runOnFfmpegThread {
       val (returnCode, report) = runProbe(
         arrayOf(
           "-v",
@@ -154,5 +176,18 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
 
   override fun cancelAll() {
     FFmpegNative.nativeCancel()
+  }
+
+  private companion object {
+    private val threadCounter = AtomicInteger(0)
+
+    /** Unbounded so a queued session never blocks anything but itself. */
+    private val executor = Executors.newCachedThreadPool(
+      ThreadFactory { runnable ->
+        Thread(runnable, "munim-ffmpeg-${threadCounter.incrementAndGet()}").apply {
+          isDaemon = true
+        }
+      },
+    )
   }
 }
