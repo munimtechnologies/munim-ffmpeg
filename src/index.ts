@@ -66,10 +66,107 @@ export function probe(
   )
 }
 
-export function getMediaInformation(path: string): Promise<unknown> {
-  return MunimFfmpeg.getMediaInformation(normalizePath(path)).then((value) =>
-    JSON.parse(value)
+/**
+ * Shape of the FFprobe report returned by {@link getMediaInformation}.
+ *
+ * FFprobe's JSON output varies by container and codec, so every field is
+ * optional and unknown keys are preserved. Numeric values such as durations
+ * and bit rates arrive as strings, exactly as FFprobe prints them.
+ */
+export interface MediaStream {
+  index: number
+  codec_type?: 'video' | 'audio' | 'subtitle' | 'data' | 'attachment' | string
+  codec_name?: string
+  codec_long_name?: string
+  profile?: string
+  codec_tag_string?: string
+  codec_tag?: string
+  width?: number
+  height?: number
+  coded_width?: number
+  coded_height?: number
+  pix_fmt?: string
+  color_range?: string
+  color_space?: string
+  color_transfer?: string
+  color_primaries?: string
+  field_order?: string
+  level?: number
+  has_b_frames?: number
+  sample_aspect_ratio?: string
+  display_aspect_ratio?: string
+  r_frame_rate?: string
+  avg_frame_rate?: string
+  time_base?: string
+  start_pts?: number
+  start_time?: string
+  duration_ts?: number
+  duration?: string
+  bit_rate?: string
+  max_bit_rate?: string
+  bits_per_raw_sample?: string
+  nb_frames?: string
+  sample_fmt?: string
+  sample_rate?: string
+  channels?: number
+  channel_layout?: string
+  bits_per_sample?: number
+  disposition?: Record<string, number>
+  tags?: Record<string, string>
+  side_data_list?: Array<Record<string, unknown>>
+  [key: string]: unknown
+}
+
+export interface MediaFormat {
+  filename?: string
+  nb_streams?: number
+  nb_programs?: number
+  format_name?: string
+  format_long_name?: string
+  start_time?: string
+  duration?: string
+  size?: string
+  bit_rate?: string
+  probe_score?: number
+  tags?: Record<string, string>
+  [key: string]: unknown
+}
+
+export interface MediaChapter {
+  id: number
+  time_base?: string
+  start?: number
+  start_time?: string
+  end?: number
+  end_time?: string
+  tags?: Record<string, string>
+  [key: string]: unknown
+}
+
+export interface MediaInformation {
+  format?: MediaFormat
+  streams?: MediaStream[]
+  chapters?: MediaChapter[]
+  [key: string]: unknown
+}
+
+export function getMediaInformation(path: string): Promise<MediaInformation> {
+  return MunimFfmpeg.getMediaInformation(normalizePath(path)).then(
+    (value) => JSON.parse(value) as MediaInformation
   )
+}
+
+/** Duration in seconds from a {@link MediaInformation} report, if FFprobe reported one. */
+export function getMediaDuration(
+  information: MediaInformation
+): number | undefined {
+  const raw =
+    information.format?.duration ??
+    information.streams?.find((stream) => stream.duration !== undefined)
+      ?.duration
+  if (raw === undefined) return undefined
+  const seconds = Number(raw)
+  return Number.isFinite(seconds) ? seconds : undefined
 }
 
 export function cancel(sessionId?: number): void {

@@ -4,6 +4,7 @@ import {
   cancelAll,
   execute,
   getFFmpegVersion,
+  getMediaDuration,
   getMediaInformation,
   listDecoders,
   listDemuxers,
@@ -30,19 +31,6 @@ export type SuiteResult = {
   ffmpegVersion: string
   encoders: string[]
   checks: CheckResult[]
-}
-
-type MediaInformation = {
-  streams?: {
-    codec_name?: string
-    codec_type?: string
-    width?: number
-    height?: number
-    sample_rate?: string
-    channels?: number
-    tags?: { language?: string; title?: string }
-  }[]
-  format?: { format_name?: string; duration?: string }
 }
 
 function workspace() {
@@ -235,9 +223,7 @@ export async function runSuite(
 
       // Hardware encoders can report success while writing nothing, so the
       // output is probed rather than trusted.
-      const information = (await getMediaInformation(
-        software.uri
-      )) as MediaInformation
+      const information = await getMediaInformation(software.uri)
       const stream = information.streams?.find(
         (candidate) => candidate.codec_type === 'video'
       )
@@ -251,9 +237,7 @@ export async function runSuite(
 
   record(
     await run('Probes the encoded video', async () => {
-      const information = (await getMediaInformation(
-        video.uri
-      )) as MediaInformation
+      const information = await getMediaInformation(video.uri)
       const stream = information.streams?.find(
         (candidate) => candidate.codec_type === 'video'
       )
@@ -265,6 +249,11 @@ export async function runSuite(
       assert(
         stream.width === RAW_WIDTH && stream.height === RAW_HEIGHT,
         `expected ${RAW_WIDTH}x${RAW_HEIGHT}, got ${stream.width}x${stream.height}`
+      )
+      const duration = getMediaDuration(information)
+      assert(
+        duration !== undefined && duration > 0,
+        `getMediaDuration reported ${duration}`
       )
       return `h264 ${stream.width}x${stream.height}, ${information.format?.duration}s`
     })
@@ -285,9 +274,7 @@ export async function runSuite(
       ])
       assert(result.success, result.failStackTrace ?? result.output)
 
-      const information = (await getMediaInformation(
-        scaled.uri
-      )) as MediaInformation
+      const information = await getMediaInformation(scaled.uri)
       const stream = information.streams?.find(
         (candidate) => candidate.codec_type === 'video'
       )
@@ -316,9 +303,7 @@ export async function runSuite(
       ])
       assert(result.success, result.failStackTrace ?? result.output)
 
-      const information = (await getMediaInformation(
-        mp3.uri
-      )) as MediaInformation
+      const information = await getMediaInformation(mp3.uri)
       const stream = information.streams?.[0]
       assert(
         stream?.codec_name === 'mp3',
@@ -341,9 +326,7 @@ export async function runSuite(
       ])
       assert(result.success, result.failStackTrace ?? result.output)
 
-      const information = (await getMediaInformation(
-        aac.uri
-      )) as MediaInformation
+      const information = await getMediaInformation(aac.uri)
       assert(
         information.streams?.[0]?.codec_name === 'aac',
         `expected aac, got ${information.streams?.[0]?.codec_name}`
@@ -459,9 +442,7 @@ export async function runSuite(
       ])
       assert(result.success, result.failStackTrace ?? result.output)
 
-      const information = (await getMediaInformation(
-        muxed.uri
-      )) as MediaInformation
+      const information = await getMediaInformation(muxed.uri)
       const kinds = (information.streams ?? []).map(
         (stream) => stream.codec_type
       )
@@ -493,9 +474,7 @@ export async function runSuite(
       ])
       assert(result.success, result.failStackTrace ?? result.output)
 
-      const information = (await getMediaInformation(
-        extracted.uri
-      )) as MediaInformation
+      const information = await getMediaInformation(extracted.uri)
       assert(
         information.streams?.length === 1 &&
           information.streams[0]?.codec_type === 'audio',
@@ -526,9 +505,7 @@ export async function runSuite(
       ])
       assert(result.success, result.failStackTrace ?? result.output)
 
-      const information = (await getMediaInformation(
-        trimmed.uri
-      )) as MediaInformation
+      const information = await getMediaInformation(trimmed.uri)
       const duration = Number(information.format?.duration ?? 'NaN')
       assert(
         Number.isFinite(duration) && duration > 0.5 && duration < 1.6,
@@ -555,9 +532,7 @@ export async function runSuite(
       assert(result.success, result.failStackTrace ?? result.output)
       assert((thumbnail.size ?? 0) > 0, 'no thumbnail written')
 
-      const information = (await getMediaInformation(
-        thumbnail.uri
-      )) as MediaInformation
+      const information = await getMediaInformation(thumbnail.uri)
       assert(
         information.streams?.[0]?.codec_name === 'png',
         `expected png, got ${information.streams?.[0]?.codec_name}`
@@ -600,9 +575,7 @@ export async function runSuite(
       assert(result.success, result.failStackTrace ?? result.output)
       assert((avif.size ?? 0) > 0, 'no avif written')
 
-      const information = (await getMediaInformation(
-        avif.uri
-      )) as MediaInformation
+      const information = await getMediaInformation(avif.uri)
       const stream = information.streams?.[0]
       assert(
         stream?.codec_name === 'av1',
@@ -661,9 +634,7 @@ export async function runSuite(
       ])
       assert(result.success, result.failStackTrace ?? result.output)
 
-      const information = (await getMediaInformation(
-        webm.uri
-      )) as MediaInformation
+      const information = await getMediaInformation(webm.uri)
       const codecs = (information.streams ?? []).map(
         (stream) => stream.codec_name
       )
@@ -809,9 +780,7 @@ export async function runSuite(
       ])
       assert(result.success, result.failStackTrace ?? result.output)
 
-      const information = (await getMediaInformation(
-        mkv.uri
-      )) as MediaInformation
+      const information = await getMediaInformation(mkv.uri)
       const kinds = (information.streams ?? []).map((s) => s.codec_type)
       assert(
         /matroska/.test(information.format?.format_name ?? ''),
@@ -838,9 +807,7 @@ export async function runSuite(
         remuxed.uri,
       ])
       assert(copyResult.success, copyResult.failStackTrace ?? copyResult.output)
-      const remuxedInfo = (await getMediaInformation(
-        remuxed.uri
-      )) as MediaInformation
+      const remuxedInfo = await getMediaInformation(remuxed.uri)
       assert(
         (remuxedInfo.streams ?? []).length === 4,
         `remux kept ${(remuxedInfo.streams ?? []).length} of 4 streams`
@@ -862,9 +829,7 @@ export async function runSuite(
         extractResult.success,
         extractResult.failStackTrace ?? extractResult.output
       )
-      const trackInfo = (await getMediaInformation(
-        track.uri
-      )) as MediaInformation
+      const trackInfo = await getMediaInformation(track.uri)
       assert(
         trackInfo.streams?.length === 1 &&
           trackInfo.streams[0]?.codec_type === 'audio',
@@ -916,9 +881,7 @@ export async function runSuite(
       ])
       assert(result.success, result.failStackTrace ?? result.output)
 
-      const information = (await getMediaInformation(
-        softMkv.uri
-      )) as MediaInformation
+      const information = await getMediaInformation(softMkv.uri)
       const subtitles = (information.streams ?? []).filter(
         (stream) => stream.codec_type === 'subtitle'
       )
@@ -970,9 +933,7 @@ export async function runSuite(
       ])
       assert(mp4Result.success, mp4Result.failStackTrace ?? mp4Result.output)
 
-      const mp4Information = (await getMediaInformation(
-        softMp4.uri
-      )) as MediaInformation
+      const mp4Information = await getMediaInformation(softMp4.uri)
       const movText = (mp4Information.streams ?? []).find(
         (stream) => stream.codec_type === 'subtitle'
       )
@@ -1004,9 +965,7 @@ export async function runSuite(
         ])
         assert(result.success, result.failStackTrace ?? result.output)
 
-        const information = (await getMediaInformation(
-          output.uri
-        )) as MediaInformation
+        const information = await getMediaInformation(output.uri)
         assert(
           information.streams?.[0]?.codec_name === 'hevc',
           `expected hevc, got ${information.streams?.[0]?.codec_name}`
@@ -1030,9 +989,7 @@ export async function runSuite(
       ])
       assert(result.success, result.failStackTrace ?? result.output)
 
-      const information = (await getMediaInformation(
-        gif.uri
-      )) as MediaInformation
+      const information = await getMediaInformation(gif.uri)
       assert(
         information.streams?.[0]?.codec_name === 'gif',
         `expected gif, got ${information.streams?.[0]?.codec_name}`
@@ -1064,9 +1021,7 @@ export async function runSuite(
       ])
       assert(result.success, result.failStackTrace ?? result.output)
 
-      const information = (await getMediaInformation(
-        joined.uri
-      )) as MediaInformation
+      const information = await getMediaInformation(joined.uri)
       const duration = Number(information.format?.duration ?? 'NaN')
       assert(
         duration > SOURCE_SECONDS * 1.8,
@@ -1092,9 +1047,7 @@ export async function runSuite(
       ])
       assert(result.success, result.failStackTrace ?? result.output)
 
-      const information = (await getMediaInformation(
-        resampled.uri
-      )) as MediaInformation
+      const information = await getMediaInformation(resampled.uri)
       const stream = information.streams?.[0]
       assert(
         stream?.sample_rate === '44100' && stream?.channels === 2,
@@ -1121,9 +1074,7 @@ export async function runSuite(
         assert(result.success, result.failStackTrace ?? result.output)
         assert((awkward.size ?? 0) > 0, 'no output written')
 
-        const information = (await getMediaInformation(
-          awkward.uri
-        )) as MediaInformation
+        const information = await getMediaInformation(awkward.uri)
         assert(information.streams?.length === 1, 'could not probe the output')
         return `${awkward.size} bytes`
       }

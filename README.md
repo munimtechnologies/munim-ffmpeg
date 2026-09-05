@@ -126,7 +126,7 @@
 | ---------------------------- | ------------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | FFmpeg argument execution    | ✅           | ✅         | Commands run asynchronously through the native compatibility library.                                                                                                   |
 | FFprobe argument execution   | ✅           | ✅         | Custom FFprobe arguments return `FFmpegSessionResult`.                                                                                                                  |
-| Parsed media information     | ✅           | ✅         | `getMediaInformation()` returns parsed FFprobe JSON.                                                                                                                    |
+| Parsed media information     | ✅           | ✅         | `getMediaInformation()` returns typed, parsed FFprobe JSON.                                                                                                                    |
 | Log callback                 | ✅           | ✅         | Logs are delivered while a session is active.                                                                                                                           |
 | Encoding-statistics callback | ✅           | ✅         | Available for FFmpeg execution.                                                                                                                                         |
 | Immediate session ID         | ✅           | ✅         | `onSessionCreated` fires after the native session is created.                                                                                                           |
@@ -436,10 +436,24 @@ function probe(
 Runs FFprobe for the format, streams, and chapters at a local media path, then parses its JSON response.
 
 ```typescript
-function getMediaInformation(path: string): Promise<unknown>
+function getMediaInformation(path: string): Promise<MediaInformation>
 ```
 
-Applications should validate or narrow the returned JSON shape before using fields from it.
+`MediaInformation` types the `format`, `streams`, and `chapters` sections of FFprobe's report. Every field is optional because FFprobe only prints what the container exposes, and numeric values such as `duration` and `bit_rate` arrive as strings, exactly as FFprobe prints them. Unknown keys are preserved under an index signature.
+
+```typescript
+const info = await getMediaInformation(inputPath)
+const video = info.streams?.find((stream) => stream.codec_type === 'video')
+console.log(video?.width, video?.height, info.format?.duration)
+```
+
+### `getMediaDuration(information)`
+
+Reads the duration in seconds from a `MediaInformation` report, falling back to the first stream that reports one. Returns `undefined` when FFprobe did not report a duration (live inputs, some raw streams).
+
+```typescript
+function getMediaDuration(information: MediaInformation): number | undefined
+```
 
 ### `cancel(sessionId?)`
 
