@@ -1,3 +1,18 @@
+## [0.7.0](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.6.0...v0.7.0) (2026-09-05)
+
+### ✨ Features
+
+* type getMediaInformation and add getMediaDuration ([a78e966](https://github.com/munimtechnologies/munim-ffmpeg/commit/a78e9662c5b43979b477733e6ea2b1cbf6a90283))
+
+### 🐛 Bug Fixes
+
+* **android:** run FFmpeg sessions on a dedicated thread pool ([d8346b3](https://github.com/munimtechnologies/munim-ffmpeg/commit/d8346b3c46bb37ea8e8094b9d6772ba6446140e3))
+
+### 🛠️ Other changes
+
+* pin the Nitro peer range and bump the example to Expo 57.0.20 ([734886d](https://github.com/munimtechnologies/munim-ffmpeg/commit/734886d9865d66cd2f328039654f61e73691b1ee)), closes [margelo/nitro#1573](https://github.com/margelo/nitro/issues/1573)
+* sync package-lock with the release ([7111e69](https://github.com/munimtechnologies/munim-ffmpeg/commit/7111e698125dda3993a034ff3934c54080c83f88))
+
 ## [0.6.0](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.5.1...v0.6.0) (2026-09-02)
 
 ### ✨ Features
