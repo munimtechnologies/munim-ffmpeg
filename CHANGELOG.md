@@ -1,3 +1,13 @@
+## [0.7.1](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.7.0...v0.7.1) (2026-09-19)
+
+### 🐛 Bug Fixes
+
+* ship FFmpeg 9.0.2 with patched native dependencies ([afa2080](https://github.com/munimtechnologies/munim-ffmpeg/commit/afa20809f0d5af0d623ffe7c47ea05e38331d215))
+
+### 🛠️ Other changes
+
+* sync package-lock with the release ([86b9218](https://github.com/munimtechnologies/munim-ffmpeg/commit/86b921831a1b7926e62567fa96d38bd865355750))
+
 ## [0.7.0](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.6.0...v0.7.0) (2026-09-05)
 
 ### ✨ Features
