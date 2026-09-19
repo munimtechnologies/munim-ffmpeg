@@ -55,8 +55,57 @@ private let installCallbacks: Void = munim_ffmpeg_set_callbacks({ context, messa
   session.onStatistics?(timeMs, sizeBytes, bitrate, speed, frame, fps, quality)
 }, nil)
 
+/// What the module remembers about each session id. Whether an unfinished
+/// session is queued, running or paused is asked of the C core, which is the
+/// only place that knows.
+private final class SessionRegistry {
+  enum Kind { case execute, probe }
+
+  private var kinds: [Double: Kind] = [:]
+  private var finished: [Double: FFmpegSessionState] = [:]
+  private var finishedOrder: [Double] = []
+  private let lock = NSLock()
+  /// Finished sessions are forgotten, oldest first, beyond this many.
+  private let finishedLimit = 512
+
+  func register(_ sessionId: Double, _ kind: Kind) {
+    lock.lock()
+    kinds[sessionId] = kind
+    lock.unlock()
+  }
+
+  func finish(_ sessionId: Double, returnCode: Int32) {
+    let state: FFmpegSessionState =
+      returnCode == Int32(MUNIM_FFMPEG_CANCELLED) ? .cancelled
+      : returnCode == 0 ? .completed
+      : .failed
+    lock.lock()
+    kinds[sessionId] = nil
+    finished[sessionId] = state
+    finishedOrder.append(sessionId)
+    if finishedOrder.count > finishedLimit {
+      finished[finishedOrder.removeFirst()] = nil
+    }
+    lock.unlock()
+  }
+
+  /// nil once finished or never issued.
+  func activeKind(_ sessionId: Double) -> Kind? {
+    lock.lock()
+    defer { lock.unlock() }
+    return kinds[sessionId]
+  }
+
+  func finishedState(_ sessionId: Double) -> FFmpegSessionState? {
+    lock.lock()
+    defer { lock.unlock() }
+    return finished[sessionId]
+  }
+}
+
 final class HybridMunimFfmpeg: HybridMunimFfmpegSpec {
   private var sessionCounter: Double = 0
+  private let registry = SessionRegistry()
 
   var ffmpegVersion: String {
     String(cString: munim_ffmpeg_version())
@@ -99,6 +148,7 @@ final class HybridMunimFfmpeg: HybridMunimFfmpegSpec {
   ) throws -> Promise<FFmpegSessionResult> {
     let promise = Promise<FFmpegSessionResult>()
     let sessionId = nextSession()
+    registry.register(sessionId, .execute)
     onSessionCreated?(sessionId)
 
     executionQueue.async {
@@ -112,14 +162,18 @@ final class HybridMunimFfmpeg: HybridMunimFfmpegSpec {
 
       let returnCode = withExtendedLifetime(session) {
         withArrayOfCStrings(arguments_) { argv in
-          munim_ffmpeg_execute_ctx(
+          munim_ffmpeg_execute_session(
             Int32(arguments_.count),
             argv,
             printedPath,
-            Unmanaged.passUnretained(session).toOpaque()
+            Unmanaged.passUnretained(session).toOpaque(),
+            Int64(sessionId)
           )
         }
       }
+      // A pause that raced the end of the run would otherwise stay listed.
+      _ = munim_ffmpeg_resume(Int64(sessionId))
+      self.registry.finish(sessionId, returnCode: returnCode)
 
       let printed = (try? String(contentsOfFile: printedPath, encoding: .utf8)) ?? ""
       try? FileManager.default.removeItem(atPath: printedPath)
@@ -144,11 +198,13 @@ final class HybridMunimFfmpeg: HybridMunimFfmpegSpec {
   ) throws -> Promise<FFmpegSessionResult> {
     let promise = Promise<FFmpegSessionResult>()
     let sessionId = nextSession()
+    registry.register(sessionId, .probe)
     onSessionCreated?(sessionId)
 
     executionQueue.async {
       let startedAt = Date()
-      let (returnCode, report) = Self.runProbe(arguments_, onLog: onLog)
+      let (returnCode, report) = Self.runProbe(arguments_, onLog: onLog, sessionId: sessionId)
+      self.registry.finish(sessionId, returnCode: returnCode)
       promise.resolve(
         withResult: self.result(
           sessionId: sessionId,
@@ -195,7 +251,8 @@ final class HybridMunimFfmpeg: HybridMunimFfmpegSpec {
   /// so it is pointed at a temporary file with `-o` and read back.
   private static func runProbe(
     _ arguments: [String],
-    onLog: ((String) -> Void)?
+    onLog: ((String) -> Void)?,
+    sessionId: Double = 0
   ) -> (Int32, String) {
     let destination = temporaryFile()
 
@@ -204,11 +261,12 @@ final class HybridMunimFfmpeg: HybridMunimFfmpegSpec {
 
     let returnCode = withExtendedLifetime(session) {
       withArrayOfCStrings(arguments) { argv in
-        munim_ffmpeg_probe_ctx(
+        munim_ffmpeg_probe_session(
           Int32(arguments.count),
           argv,
           destination,
-          Unmanaged.passUnretained(session).toOpaque()
+          Unmanaged.passUnretained(session).toOpaque(),
+          Int64(sessionId)
         )
       }
     }
@@ -219,16 +277,20 @@ final class HybridMunimFfmpeg: HybridMunimFfmpegSpec {
     return (returnCode, report.isEmpty ? session.output : report)
   }
 
+  private static func validate(_ sessionId: Double) throws {
+    guard
+      sessionId.isFinite,
+      sessionId > 0,
+      sessionId.rounded(.towardZero) == sessionId,
+      sessionId <= 9_007_199_254_740_991
+    else {
+      throw MunimFfmpegError.invalidSessionId(sessionId)
+    }
+  }
+
   func cancel(sessionId: Double?) throws {
     if let sessionId {
-      guard
-        sessionId.isFinite,
-        sessionId > 0,
-        sessionId.rounded(.towardZero) == sessionId,
-        sessionId <= 9_007_199_254_740_991
-      else {
-        throw MunimFfmpegError.invalidSessionId(sessionId)
-      }
+      try Self.validate(sessionId)
     }
     // One execution runs at a time, so cancelling a specific session and
     // cancelling everything are the same operation.
@@ -237,6 +299,32 @@ final class HybridMunimFfmpeg: HybridMunimFfmpegSpec {
 
   func cancelAll() throws {
     munim_ffmpeg_cancel()
+  }
+
+  func pause(sessionId: Double) throws -> Bool {
+    try Self.validate(sessionId)
+    guard registry.activeKind(sessionId) == .execute else { return false }
+    _ = munim_ffmpeg_pause(Int64(sessionId))
+    // The run may have ended between the check and the pause; the core drops
+    // the pause of a finished session, so report what actually happened.
+    if registry.activeKind(sessionId) == nil {
+      _ = munim_ffmpeg_resume(Int64(sessionId))
+      return false
+    }
+    return true
+  }
+
+  func resume(sessionId: Double) throws -> Bool {
+    try Self.validate(sessionId)
+    return munim_ffmpeg_resume(Int64(sessionId)) != 0
+  }
+
+  func getSessionState(sessionId: Double) throws -> FFmpegSessionState {
+    try Self.validate(sessionId)
+    if let state = registry.finishedState(sessionId) { return state }
+    guard registry.activeKind(sessionId) != nil else { return .unknown }
+    if munim_ffmpeg_is_paused(Int64(sessionId)) != 0 { return .paused }
+    return munim_ffmpeg_running_session() == Int64(sessionId) ? .running : .queued
   }
 }
 

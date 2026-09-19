@@ -61,6 +61,18 @@ abstract class HybridMunimFfmpegSpec: HybridObject() {
   @DoNotStrip
   @Keep
   abstract fun cancelAll(): Unit
+  
+  @DoNotStrip
+  @Keep
+  abstract fun pause(sessionId: Double): Boolean
+  
+  @DoNotStrip
+  @Keep
+  abstract fun resume(sessionId: Double): Boolean
+  
+  @DoNotStrip
+  @Keep
+  abstract fun getSessionState(sessionId: Double): FFmpegSessionState
 
   // Default implementation of `HybridObject.toString()`
   override fun toString(): String {

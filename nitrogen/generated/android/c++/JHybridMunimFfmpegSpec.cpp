@@ -9,6 +9,8 @@
 
 // Forward declaration of `FFmpegSessionResult` to properly resolve imports.
 namespace margelo::nitro::munimffmpeg { struct FFmpegSessionResult; }
+// Forward declaration of `FFmpegSessionState` to properly resolve imports.
+namespace margelo::nitro::munimffmpeg { enum class FFmpegSessionState; }
 
 #include <string>
 #include "FFmpegSessionResult.hpp"
@@ -16,6 +18,8 @@ namespace margelo::nitro::munimffmpeg { struct FFmpegSessionResult; }
 #include <NitroModules/JPromise.hpp>
 #include "JFFmpegSessionResult.hpp"
 #include <optional>
+#include "FFmpegSessionState.hpp"
+#include "JFFmpegSessionState.hpp"
 #include <vector>
 #include <functional>
 #include "JFunc_void_std__string.hpp"
@@ -133,6 +137,21 @@ namespace margelo::nitro::munimffmpeg {
   void JHybridMunimFfmpegSpec::cancelAll() {
     static const auto method = _javaPart->javaClassStatic()->getMethod<void()>("cancelAll");
     method(_javaPart);
+  }
+  bool JHybridMunimFfmpegSpec::pause(double sessionId) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jboolean(double /* sessionId */)>("pause");
+    auto __result = method(_javaPart, sessionId);
+    return static_cast<bool>(__result);
+  }
+  bool JHybridMunimFfmpegSpec::resume(double sessionId) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jboolean(double /* sessionId */)>("resume");
+    auto __result = method(_javaPart, sessionId);
+    return static_cast<bool>(__result);
+  }
+  FFmpegSessionState JHybridMunimFfmpegSpec::getSessionState(double sessionId) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JFFmpegSessionState>(double /* sessionId */)>("getSessionState");
+    auto __result = method(_javaPart, sessionId);
+    return __result->toCpp();
   }
 
 } // namespace margelo::nitro::munimffmpeg

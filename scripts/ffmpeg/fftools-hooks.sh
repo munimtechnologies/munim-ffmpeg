@@ -69,3 +69,53 @@ int print_filtergraph(FilterGraph *fg, AVFilterGraph *graph)
     return 0;
 }
 STUB
+
+# Pause/resume: FFmpeg has no pause of its own, so the threads that bring data
+# into the pipeline wait while the running session is paused. Demuxer threads
+# wait before each read (and shift their -re/-readrate clocks by the time spent
+# paused so they do not burst afterwards); filtergraphs with no inputs, such as
+# -filter_complex testsrc, wait before pulling frames. Everything downstream
+# simply drains and idles. munim_ffmpeg_hook_wait_while_paused() lives in
+# munim_ffmpeg_core.c and returns the microseconds it waited.
+patch_once() {
+  local file="$1" anchor="$2" replacement="$3"
+  ANCHOR="$anchor" REPLACEMENT="$replacement" perl -0pi -e '
+    my $n = s/\Q$ENV{ANCHOR}\E/$ENV{REPLACEMENT}/g;
+    die "fftools-hooks.sh: expected 1 match in $ARGV, found $n\n" unless $n == 1;
+  ' "$file"
+}
+
+patch_once "$SRC/ffmpeg_demux.c" \
+'    while (1) {
+        DemuxStream *ds;
+        unsigned send_flags = 0;
+' \
+'    while (1) {
+        DemuxStream *ds;
+        unsigned send_flags = 0;
+        int64_t munim_paused_us = munim_ffmpeg_hook_wait_while_paused();
+
+        if (munim_paused_us > 0) {
+            d->wallclock_start += munim_paused_us;
+            if (d->resume_wc)
+                d->resume_wc += munim_paused_us;
+        }
+'
+
+patch_once "$SRC/ffmpeg_filter.c" \
+'read_frames:
+        // retrieve all newly available frames
+' \
+'read_frames:
+        if (!fg->nb_inputs)
+            munim_ffmpeg_hook_wait_while_paused();
+        // retrieve all newly available frames
+'
+
+for file in ffmpeg_demux.c ffmpeg_filter.c; do
+  patch_once "$SRC/$file" '#include "ffmpeg.h"
+' '#include "ffmpeg.h"
+
+int64_t munim_ffmpeg_hook_wait_while_paused(void);
+'
+done

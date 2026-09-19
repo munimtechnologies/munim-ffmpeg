@@ -16,6 +16,7 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
     get() = FFmpegNative.nativeVersion()
 
   private val sessions = AtomicLong(0)
+  private val registry = SessionRegistry()
 
   private fun nextSession() = sessions.incrementAndGet().toDouble()
 
@@ -72,6 +73,7 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
     onSessionCreated: ((sessionId: Double) -> Unit)?,
   ): Promise<FFmpegSessionResult> {
     val sessionId = nextSession()
+    registry.register(sessionId, SessionRegistry.Kind.EXECUTE)
     onSessionCreated?.invoke(sessionId)
 
     return runOnFfmpegThread {
@@ -84,7 +86,11 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
         logSink = { message -> onLog?.invoke(message) },
         statisticsSink = onStatistics,
       )
-      val returnCode = FFmpegNative.nativeExecute(arguments_, stdout.absolutePath, session)
+      val returnCode =
+        FFmpegNative.nativeExecute(arguments_, stdout.absolutePath, session, sessionId.toLong())
+      // A pause that raced the end of the run would otherwise stay listed.
+      FFmpegNative.nativeResume(sessionId.toLong())
+      registry.finish(sessionId, returnCode)
 
       val printed = runCatching { stdout.readText() }.getOrDefault("")
       stdout.delete()
@@ -99,11 +105,13 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
     onSessionCreated: ((sessionId: Double) -> Unit)?,
   ): Promise<FFmpegSessionResult> {
     val sessionId = nextSession()
+    registry.register(sessionId, SessionRegistry.Kind.PROBE)
     onSessionCreated?.invoke(sessionId)
 
     return runOnFfmpegThread {
       val startedAt = System.currentTimeMillis()
-      val (returnCode, report) = runProbe(arguments_, onLog)
+      val (returnCode, report) = runProbe(arguments_, onLog, sessionId.toLong())
+      registry.finish(sessionId, returnCode)
       result(sessionId, returnCode, report, System.currentTimeMillis() - startedAt)
     }
   }
@@ -141,6 +149,7 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
   private fun runProbe(
     arguments: Array<String>,
     onLog: ((message: String) -> Unit)?,
+    sessionId: Long = 0,
   ): Pair<Int, String> {
     val destination = File.createTempFile("munim-ffprobe", ".txt")
     try {
@@ -149,7 +158,7 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
         statisticsSink = null,
       )
       val returnCode =
-        FFmpegNative.nativeExecuteProbe(arguments, destination.absolutePath, session)
+        FFmpegNative.nativeExecuteProbe(arguments, destination.absolutePath, session, sessionId)
 
       val report = destination.readText()
       return returnCode to report.ifEmpty { session.output }
@@ -158,17 +167,19 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
     }
   }
 
-  override fun cancel(sessionId: Double?) {
-    if (sessionId != null) {
-      require(
-        sessionId.isFinite() &&
-          sessionId > 0 &&
-          sessionId % 1.0 == 0.0 &&
-          sessionId <= 9_007_199_254_740_991.0,
-      ) {
-        "Invalid FFmpeg session ID: $sessionId. Expected a positive safe integer."
-      }
+  private fun validate(sessionId: Double) {
+    require(
+      sessionId.isFinite() &&
+        sessionId > 0 &&
+        sessionId % 1.0 == 0.0 &&
+        sessionId <= 9_007_199_254_740_991.0,
+    ) {
+      "Invalid FFmpeg session ID: $sessionId. Expected a positive safe integer."
     }
+  }
+
+  override fun cancel(sessionId: Double?) {
+    if (sessionId != null) validate(sessionId)
     // Only one execution runs at a time, so a targeted cancel and cancelAll()
     // are the same operation.
     FFmpegNative.nativeCancel()
@@ -176,6 +187,36 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
 
   override fun cancelAll() {
     FFmpegNative.nativeCancel()
+  }
+
+  override fun pause(sessionId: Double): Boolean {
+    validate(sessionId)
+    if (registry.activeKind(sessionId) != SessionRegistry.Kind.EXECUTE) return false
+    FFmpegNative.nativePause(sessionId.toLong())
+    // The run may have ended between the check and the pause.
+    if (registry.activeKind(sessionId) == null) {
+      FFmpegNative.nativeResume(sessionId.toLong())
+      return false
+    }
+    return true
+  }
+
+  override fun resume(sessionId: Double): Boolean {
+    validate(sessionId)
+    return FFmpegNative.nativeResume(sessionId.toLong())
+  }
+
+  override fun getSessionState(sessionId: Double): FFmpegSessionState {
+    validate(sessionId)
+    registry.finishedState(sessionId)?.let { return it }
+    if (registry.activeKind(sessionId) == null) return FFmpegSessionState.UNKNOWN
+    val id = sessionId.toLong()
+    if (FFmpegNative.nativeIsPaused(id)) return FFmpegSessionState.PAUSED
+    return if (FFmpegNative.nativeRunningSession() == id) {
+      FFmpegSessionState.RUNNING
+    } else {
+      FFmpegSessionState.QUEUED
+    }
   }
 
   private companion object {
@@ -189,5 +230,45 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
         }
       },
     )
+  }
+}
+
+/**
+ * What the module remembers about each session id. Whether an unfinished
+ * session is queued, running or paused is asked of the native core, which is
+ * the only place that knows.
+ */
+private class SessionRegistry {
+  enum class Kind { EXECUTE, PROBE }
+
+  private val kinds = HashMap<Double, Kind>()
+  private val finished = LinkedHashMap<Double, FFmpegSessionState>()
+
+  @Synchronized
+  fun register(sessionId: Double, kind: Kind) {
+    kinds[sessionId] = kind
+  }
+
+  @Synchronized
+  fun finish(sessionId: Double, returnCode: Int) {
+    kinds.remove(sessionId)
+    finished[sessionId] = when (returnCode) {
+      FFmpegNative.CANCELLED -> FFmpegSessionState.CANCELLED
+      0 -> FFmpegSessionState.COMPLETED
+      else -> FFmpegSessionState.FAILED
+    }
+    // Finished sessions are forgotten, oldest first, beyond this many.
+    while (finished.size > FINISHED_LIMIT) finished.remove(finished.keys.first())
+  }
+
+  /** null once finished or never issued. */
+  @Synchronized
+  fun activeKind(sessionId: Double): Kind? = kinds[sessionId]
+
+  @Synchronized
+  fun finishedState(sessionId: Double): FFmpegSessionState? = finished[sessionId]
+
+  private companion object {
+    const val FINISHED_LIMIT = 512
   }
 }

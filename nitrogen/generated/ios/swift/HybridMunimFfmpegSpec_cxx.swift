@@ -274,4 +274,40 @@ open class HybridMunimFfmpegSpec_cxx {
       return bridge.create_Result_void_(__exceptionPtr)
     }
   }
+  
+  @inline(__always)
+  public final func pause(sessionId: Double) -> bridge.Result_bool_ {
+    do {
+      let __result = try self.__implementation.pause(sessionId: sessionId)
+      let __resultCpp = __result
+      return bridge.create_Result_bool_(__resultCpp)
+    } catch (let __error) {
+      let __exceptionPtr = __error.toCpp()
+      return bridge.create_Result_bool_(__exceptionPtr)
+    }
+  }
+  
+  @inline(__always)
+  public final func resume(sessionId: Double) -> bridge.Result_bool_ {
+    do {
+      let __result = try self.__implementation.resume(sessionId: sessionId)
+      let __resultCpp = __result
+      return bridge.create_Result_bool_(__resultCpp)
+    } catch (let __error) {
+      let __exceptionPtr = __error.toCpp()
+      return bridge.create_Result_bool_(__exceptionPtr)
+    }
+  }
+  
+  @inline(__always)
+  public final func getSessionState(sessionId: Double) -> bridge.Result_FFmpegSessionState_ {
+    do {
+      let __result = try self.__implementation.getSessionState(sessionId: sessionId)
+      let __resultCpp = __result
+      return bridge.create_Result_FFmpegSessionState_(__resultCpp)
+    } catch (let __error) {
+      let __exceptionPtr = __error.toCpp()
+      return bridge.create_Result_FFmpegSessionState_(__exceptionPtr)
+    }
+  }
 }

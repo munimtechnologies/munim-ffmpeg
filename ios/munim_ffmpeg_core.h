@@ -61,6 +61,41 @@ int munim_ffmpeg_probe_ctx(int argc, const char *const *argv,
  */
 void munim_ffmpeg_cancel(void);
 
+/**
+ * Like munim_ffmpeg_execute_ctx, for a run identified by `session_id` (> 0) so
+ * it can be paused and resumed. munim_ffmpeg_execute_ctx runs with id 0, which
+ * cannot be paused.
+ */
+int munim_ffmpeg_execute_session(int argc, const char *const *argv,
+                                 const char *stdout_path, void *context,
+                                 long long session_id);
+
+/**
+ * Pauses the execution with `session_id`. If it is running, its input threads
+ * stop reading and the rest of the pipeline idles once it has drained; if it is
+ * still queued, it will start paused. Output files stay open and
+ * munim_ffmpeg_resume() continues exactly where it stopped. Cancelling works
+ * as usual and also clears every pause. Returns 1 if the session is running.
+ */
+int munim_ffmpeg_pause(long long session_id);
+
+/** Resumes `session_id`. Returns 1 if it was paused. */
+int munim_ffmpeg_resume(long long session_id);
+
+/** Returns 1 while `session_id` is paused. */
+int munim_ffmpeg_is_paused(long long session_id);
+
+/**
+ * Id of the execution or probe currently running, or 0. Probes started through
+ * munim_ffmpeg_probe_session report their id here but cannot be paused.
+ */
+long long munim_ffmpeg_running_session(void);
+
+/** Like munim_ffmpeg_probe_ctx, for a run identified by `session_id`. */
+int munim_ffmpeg_probe_session(int argc, const char *const *argv,
+                               const char *output_path, void *context,
+                               long long session_id);
+
 /** Return code reported when a run was cancelled. */
 #define MUNIM_FFMPEG_CANCELLED 255
 

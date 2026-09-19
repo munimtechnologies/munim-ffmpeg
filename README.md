@@ -100,6 +100,7 @@
 - 📈 **Encoding statistics:** Track time, size, bitrate, speed, frames, FPS, and quality
 - 🎯 **Targeted cancellation:** Capture a native session ID immediately and cancel only that command
 - 🛑 **Global cancellation:** Stop all active sessions during workflow or screen cleanup
+- ⏸️ **Pause and resume:** Hold a running or queued session with no CPU use and continue exactly where it stopped
 
 ### FFprobe and media inspection
 
@@ -132,6 +133,8 @@
 | Immediate session ID         | ✅           | ✅         | `onSessionCreated` fires after the native session is created.                                                                                                           |
 | Cancel one FFmpeg session    | ✅           | ✅         | Pass the positive safe-integer ID received by `execute`'s `onSessionCreated`. The native dependency does not expose FFprobe cancellation.                               |
 | Cancel all FFmpeg sessions   | ✅           | ✅         | Use `cancelAll()` or call `cancel()` without an ID.                                                                                                                     |
+| Pause and resume a session   | ✅           | ✅         | `pause()` / `resume()` with an `execute` session ID, running or queued. FFprobe sessions cannot be paused.                                                              |
+| Session state                | ✅           | ✅         | `getSessionState()` reports `queued`, `running`, `paused`, `completed`, `failed`, or `cancelled`.                                                                       |
 | Expo Go                      | ❌           | ❌         | A native development build is required.                                                                                                                                 |
 | Capability discovery         | ✅           | ✅         | `listEncoders()`, `listDecoders()`, `listMuxers()`, `listDemuxers()`, `listFilters()`, `listProtocols()`, and `pickEncoder()` report what the bundled build supports.   |
 | Subtitle burn-in             | ✅           | ✅         | libass with system fonts: Core Text on iOS, fontconfig over `/system/fonts` on Android.                                                                                 |
@@ -472,6 +475,57 @@ Cancels every active FFmpeg session.
 ```typescript
 function cancelAll(): void
 ```
+
+### `pause(sessionId)` and `resume(sessionId)`
+
+Pauses a session started with `execute()`, whether it is running or still queued behind another one, and resumes it later.
+
+```typescript
+function pause(sessionId: number): boolean
+function resume(sessionId: number): boolean
+```
+
+FFmpeg itself has no pause, so munim-ffmpeg stops the threads that read its inputs. Everything downstream finishes the frames it already has and then waits, so a paused session uses no CPU. Output files stay open, and `resume()` carries on from the exact packet where reading stopped. Nothing is re-encoded, skipped or duplicated, and the `execute()` promise settles once, when the work is done. `-re` and `-readrate` inputs have their clocks shifted by the time spent paused, so they do not rush to catch up afterwards.
+
+`pause()` returns `false` if the session is unknown, has already finished, or is an FFprobe session. `resume()` returns `false` if the session was not paused. `cancel()` and `cancelAll()` work while paused.
+
+Notes:
+
+- The statistics callback keeps firing while paused, reporting the same `timeMs`. `speed` includes the paused time.
+- Live network inputs are not read while paused. Servers that drop idle connections may end the session when it resumes.
+
+```typescript
+import { execute, pause, resume } from 'munim-ffmpeg'
+
+let sessionId: number | undefined
+const done = execute(args, undefined, undefined, (id) => {
+  sessionId = id
+})
+
+// Later, from a pause button:
+pause(sessionId!)
+// …and from a resume button:
+resume(sessionId!)
+
+const result = await done
+```
+
+### `getSessionState(sessionId)`
+
+```typescript
+type FFmpegSessionState =
+  | 'queued'
+  | 'running'
+  | 'paused'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'unknown'
+
+function getSessionState(sessionId: number): FFmpegSessionState
+```
+
+`queued` sessions are waiting for the one running ahead of them, since FFmpeg runs one execution at a time. `unknown` means the ID was never issued, or it finished long enough ago that its record was dropped (the last 512 finished sessions are kept).
 
 ### `getFFmpegVersion()`
 

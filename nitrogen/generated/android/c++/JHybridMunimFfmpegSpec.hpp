@@ -59,6 +59,9 @@ namespace margelo::nitro::munimffmpeg {
     std::shared_ptr<Promise<std::string>> getMediaInformation(const std::string& path) override;
     void cancel(std::optional<double> sessionId) override;
     void cancelAll() override;
+    bool pause(double sessionId) override;
+    bool resume(double sessionId) override;
+    FFmpegSessionState getSessionState(double sessionId) override;
 
   private:
     jni::global_ref<JHybridMunimFfmpegSpec::JavaPart> _javaPart;

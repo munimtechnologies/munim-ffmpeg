@@ -10,6 +10,8 @@
 // Forward declarations of C++ defined types
 // Forward declaration of `FFmpegSessionResult` to properly resolve imports.
 namespace margelo::nitro::munimffmpeg { struct FFmpegSessionResult; }
+// Forward declaration of `FFmpegSessionState` to properly resolve imports.
+namespace margelo::nitro::munimffmpeg { enum class FFmpegSessionState; }
 // Forward declaration of `HybridMunimFfmpegSpec` to properly resolve imports.
 namespace margelo::nitro::munimffmpeg { class HybridMunimFfmpegSpec; }
 
@@ -19,6 +21,7 @@ namespace NitroMunimFfmpeg { class HybridMunimFfmpegSpec_cxx; }
 
 // Include C++ defined types
 #include "FFmpegSessionResult.hpp"
+#include "FFmpegSessionState.hpp"
 #include "HybridMunimFfmpegSpec.hpp"
 #include <NitroModules/Promise.hpp>
 #include <NitroModules/PromiseHolder.hpp>
@@ -293,6 +296,24 @@ namespace margelo::nitro::munimffmpeg::bridge::swift {
   }
   inline Result_void_ create_Result_void_(const std::exception_ptr& error) noexcept {
     return Result<void>::withError(error);
+  }
+  
+  // pragma MARK: Result<bool>
+  using Result_bool_ = Result<bool>;
+  inline Result_bool_ create_Result_bool_(bool value) noexcept {
+    return Result<bool>::withValue(std::move(value));
+  }
+  inline Result_bool_ create_Result_bool_(const std::exception_ptr& error) noexcept {
+    return Result<bool>::withError(error);
+  }
+  
+  // pragma MARK: Result<FFmpegSessionState>
+  using Result_FFmpegSessionState_ = Result<FFmpegSessionState>;
+  inline Result_FFmpegSessionState_ create_Result_FFmpegSessionState_(FFmpegSessionState value) noexcept {
+    return Result<FFmpegSessionState>::withValue(std::move(value));
+  }
+  inline Result_FFmpegSessionState_ create_Result_FFmpegSessionState_(const std::exception_ptr& error) noexcept {
+    return Result<FFmpegSessionState>::withError(error);
   }
 
 } // namespace margelo::nitro::munimffmpeg::bridge::swift

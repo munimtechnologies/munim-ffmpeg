@@ -111,7 +111,8 @@ JNIEXPORT jint JNICALL
 Java_com_margelo_nitro_munimffmpeg_FFmpegNative_nativeExecute(JNIEnv *env, jclass clazz,
                                                               jobjectArray args,
                                                               jstring stdoutPath,
-                                                              jobject session)
+                                                              jobject session,
+                                                              jlong sessionId)
 {
     jsize count = (*env)->GetArrayLength(env, args);
     const char **argv = to_argv(env, args, count);
@@ -122,7 +123,8 @@ Java_com_margelo_nitro_munimffmpeg_FFmpegNative_nativeExecute(JNIEnv *env, jclas
     jobject session_ref = (*env)->NewGlobalRef(env, session);
 
     const char *out = (*env)->GetStringUTFChars(env, stdoutPath, NULL);
-    int ret = munim_ffmpeg_execute_ctx((int)count, argv, out, session_ref);
+    int ret = munim_ffmpeg_execute_session((int)count, argv, out, session_ref,
+                                           (long long)sessionId);
     (*env)->ReleaseStringUTFChars(env, stdoutPath, out);
 
     (*env)->DeleteGlobalRef(env, session_ref);
@@ -134,7 +136,8 @@ JNIEXPORT jint JNICALL
 Java_com_margelo_nitro_munimffmpeg_FFmpegNative_nativeExecuteProbe(JNIEnv *env, jclass clazz,
                                                                    jobjectArray args,
                                                                    jstring outputPath,
-                                                                   jobject session)
+                                                                   jobject session,
+                                                                   jlong sessionId)
 {
     jsize count = (*env)->GetArrayLength(env, args);
     const char **argv = to_argv(env, args, count);
@@ -143,7 +146,8 @@ Java_com_margelo_nitro_munimffmpeg_FFmpegNative_nativeExecuteProbe(JNIEnv *env, 
     jobject session_ref = (*env)->NewGlobalRef(env, session);
 
     const char *out = (*env)->GetStringUTFChars(env, outputPath, NULL);
-    int ret = munim_ffmpeg_probe_ctx((int)count, argv, out, session_ref);
+    int ret = munim_ffmpeg_probe_session((int)count, argv, out, session_ref,
+                                         (long long)sessionId);
     (*env)->ReleaseStringUTFChars(env, outputPath, out);
 
     (*env)->DeleteGlobalRef(env, session_ref);
@@ -155,4 +159,31 @@ JNIEXPORT void JNICALL
 Java_com_margelo_nitro_munimffmpeg_FFmpegNative_nativeCancel(JNIEnv *env, jclass clazz)
 {
     munim_ffmpeg_cancel();
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_margelo_nitro_munimffmpeg_FFmpegNative_nativePause(JNIEnv *env, jclass clazz,
+                                                            jlong sessionId)
+{
+    return munim_ffmpeg_pause((long long)sessionId) ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_margelo_nitro_munimffmpeg_FFmpegNative_nativeResume(JNIEnv *env, jclass clazz,
+                                                             jlong sessionId)
+{
+    return munim_ffmpeg_resume((long long)sessionId) ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_margelo_nitro_munimffmpeg_FFmpegNative_nativeIsPaused(JNIEnv *env, jclass clazz,
+                                                               jlong sessionId)
+{
+    return munim_ffmpeg_is_paused((long long)sessionId) ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jlong JNICALL
+Java_com_margelo_nitro_munimffmpeg_FFmpegNative_nativeRunningSession(JNIEnv *env, jclass clazz)
+{
+    return (jlong)munim_ffmpeg_running_session();
 }
