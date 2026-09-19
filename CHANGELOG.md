@@ -1,3 +1,13 @@
+## [0.8.0](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.7.1...v0.8.0) (2026-09-19)
+
+### ✨ Features
+
+* pause and resume FFmpeg sessions ([#12](https://github.com/munimtechnologies/munim-ffmpeg/issues/12)) ([46852ea](https://github.com/munimtechnologies/munim-ffmpeg/commit/46852ea1be562c3fd14fa12056fec25473b7d7a3))
+
+### 🛠️ Other changes
+
+* sync package-lock with the release ([47fae81](https://github.com/munimtechnologies/munim-ffmpeg/commit/47fae81873daf83cfcda9c46cfc0a97186c88e4f))
+
 ## [0.7.1](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.7.0...v0.7.1) (2026-09-19)
 
 ### 🐛 Bug Fixes
