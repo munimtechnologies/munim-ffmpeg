@@ -1,5 +1,5 @@
 {
   "archive": "munim-ffmpeg-binaries.tar.gz",
-  "sha256": "992527af6fd69672cd863501371a835cad6983c45be5525b45a8462848fe7ecc",
-  "ffmpeg": "9.0.1"
+  "sha256": "6d709ca6ddf428743c29d54325cca34c3335d771076690472bb036c2d849e64f",
+  "ffmpeg": "9.0.2"
 }
