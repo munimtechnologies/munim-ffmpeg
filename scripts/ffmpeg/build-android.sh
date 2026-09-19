@@ -18,7 +18,7 @@ TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/$HOST_TAG"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE="${FFMPEG_WORKSPACE:-$HOME/.munim-ffmpeg-build}"
-SOURCE="$WORKSPACE/ffmpeg-${FFMPEG_VERSION:-9.0.1}"
+SOURCE="$WORKSPACE/ffmpeg-${FFMPEG_VERSION:-9.0.2}"
 DEPS="$WORKSPACE/deps"
 PREFIX="$WORKSPACE/out/android-$ABI"
 BUILD="$WORKSPACE/build/android-$ABI"
@@ -98,8 +98,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libvpx.a" ]; then
   echo "  libvpx"
-  fetch "https://github.com/webmproject/libvpx/archive/refs/tags/v1.15.0.tar.gz" libvpx-1.15.0.tar.gz
-  unpack libvpx-1.15.0.tar.gz "libvpx-$ABI"
+  fetch "https://github.com/webmproject/libvpx/archive/refs/tags/v1.17.0.tar.gz" libvpx-1.17.0.tar.gz
+  unpack libvpx-1.17.0.tar.gz "libvpx-$ABI"
   (
     cd "$DEPS/libvpx-$ABI"
     # Runtime CPU detection stays on: disabling it bakes in instructions many
@@ -114,8 +114,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libdav1d.a" ]; then
   echo "  dav1d"
-  fetch "https://code.videolan.org/videolan/dav1d/-/archive/1.5.1/dav1d-1.5.1.tar.gz" dav1d-1.5.1.tar.gz
-  unpack dav1d-1.5.1.tar.gz "dav1d-$ABI"
+  fetch "https://code.videolan.org/videolan/dav1d/-/archive/1.5.4/dav1d-1.5.4.tar.gz" dav1d-1.5.4.tar.gz
+  unpack dav1d-1.5.4.tar.gz "dav1d-$ABI"
   (
     cd "$DEPS/dav1d-$ABI"
     case "$ABI" in
@@ -213,8 +213,8 @@ fi
 # discover the system fonts under /system/fonts.
 if [ ! -f "$PREFIX/lib/libfreetype.a" ]; then
   echo "  FreeType"
-  fetch "https://download.savannah.gnu.org/releases/freetype/freetype-2.13.3.tar.xz" freetype-2.13.3.tar.xz
-  unpack freetype-2.13.3.tar.xz "freetype-$ABI"
+  fetch "https://download.savannah.gnu.org/releases/freetype/freetype-2.14.3.tar.xz" freetype-2.14.3.tar.xz
+  unpack freetype-2.14.3.tar.xz "freetype-$ABI"
   (
     cd "$DEPS/freetype-$ABI"
     PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig" \
@@ -238,8 +238,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libharfbuzz.a" ]; then
   echo "  HarfBuzz"
-  fetch "https://github.com/harfbuzz/harfbuzz/releases/download/10.1.0/harfbuzz-10.1.0.tar.xz" harfbuzz-10.1.0.tar.xz
-  unpack harfbuzz-10.1.0.tar.xz "harfbuzz-$ABI"
+  fetch "https://github.com/harfbuzz/harfbuzz/releases/download/14.4.0/harfbuzz-14.4.0.tar.xz" harfbuzz-14.4.0.tar.xz
+  unpack harfbuzz-14.4.0.tar.xz "harfbuzz-$ABI"
   (
     cd "$DEPS/harfbuzz-$ABI"
     case "$ABI" in
@@ -268,15 +268,15 @@ EOF
       --default-library=static --buildtype=release \
       -Dfreetype=enabled -Dglib=disabled -Dgobject=disabled -Dcairo=disabled \
       -Dicu=disabled -Dtests=disabled -Ddocs=disabled -Dbenchmark=disabled \
-      -Dintrospection=disabled -Dutilities=disabled
+      -Dintrospection=disabled -Dutilities=disabled -Draster=disabled -Dvector=disabled -Dgpu=disabled -Dgpu_demo=disabled -Dsubset=disabled
     ninja -C build && ninja -C build install
   ) > "$WORKSPACE/build/harfbuzz-$ABI.log" 2>&1
 fi
 
 if [ ! -f "$PREFIX/lib/libexpat.a" ]; then
   echo "  expat"
-  fetch "https://github.com/libexpat/libexpat/releases/download/R_2_7_1/expat-2.7.1.tar.xz" expat-2.7.1.tar.xz
-  unpack expat-2.7.1.tar.xz "expat-$ABI"
+  fetch "https://github.com/libexpat/libexpat/releases/download/R_2_8_4/expat-2.8.4.tar.xz" expat-2.8.4.tar.xz
+  unpack expat-2.8.4.tar.xz "expat-$ABI"
   (
     cd "$DEPS/expat-$ABI"
     cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
@@ -290,8 +290,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libfontconfig.a" ]; then
   echo "  fontconfig"
-  fetch "https://www.freedesktop.org/software/fontconfig/release/fontconfig-2.16.0.tar.xz" fontconfig-2.16.0.tar.xz
-  unpack fontconfig-2.16.0.tar.xz "fontconfig-$ABI"
+  fetch "https://gitlab.freedesktop.org/api/v4/projects/890/packages/generic/fontconfig/2.18.3/fontconfig-2.18.3.tar.xz" fontconfig-2.18.3.tar.xz
+  unpack fontconfig-2.18.3.tar.xz "fontconfig-$ABI"
   (
     cd "$DEPS/fontconfig-$ABI"
     case "$ABI" in
@@ -320,7 +320,7 @@ EOF
     meson setup build --cross-file cross-fontconfig.txt --prefix="$PREFIX" \
       --default-library=static --buildtype=release \
       -Ddoc=disabled -Dnls=disabled -Dtests=disabled -Dtools=disabled \
-      -Dcache-build=disabled -Diconv=disabled \
+      -Dcache-build=disabled -Diconv=disabled -Dxml-backend=expat \
       -Ddefault-fonts-dirs=/system/fonts
     ninja -C build && ninja -C build install
   ) > "$WORKSPACE/build/fontconfig-$ABI.log" 2>&1
@@ -328,8 +328,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libass.a" ]; then
   echo "  libass"
-  fetch "https://github.com/libass/libass/releases/download/0.17.4/libass-0.17.4.tar.xz" libass-0.17.4.tar.xz
-  unpack libass-0.17.4.tar.xz "libass-$ABI"
+  fetch "https://github.com/libass/libass/releases/download/0.17.5/libass-0.17.5.tar.xz" libass-0.17.5.tar.xz
+  unpack libass-0.17.5.tar.xz "libass-$ABI"
   (
     cd "$DEPS/libass-$ABI"
     PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig" \
@@ -341,8 +341,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libmbedtls.a" ]; then
   echo "  mbedTLS"
-  fetch "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.2/mbedtls-3.6.2.tar.bz2" mbedtls-3.6.2.tar.bz2
-  unpack mbedtls-3.6.2.tar.bz2 "mbedtls-$ABI"
+  fetch "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.7/mbedtls-3.6.7.tar.bz2" mbedtls-3.6.7.tar.bz2
+  unpack mbedtls-3.6.7.tar.bz2 "mbedtls-$ABI"
   (
     cd "$DEPS/mbedtls-$ABI"
     cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \

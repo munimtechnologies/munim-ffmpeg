@@ -13,7 +13,7 @@ SDK="$(xcrun -sdk "$SDK_NAME" --show-sdk-path)"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE="${FFMPEG_WORKSPACE:-$HOME/.munim-ffmpeg-build}"
-SOURCE="$WORKSPACE/ffmpeg-${FFMPEG_VERSION:-9.0.1}"
+SOURCE="$WORKSPACE/ffmpeg-${FFMPEG_VERSION:-9.0.2}"
 SLICE="$SDK_NAME-$ARCH"
 PREFIX="$WORKSPACE/out/ios-$SLICE"
 BUILD="$WORKSPACE/build/ios-$SLICE"

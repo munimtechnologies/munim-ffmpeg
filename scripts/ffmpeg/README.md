@@ -43,7 +43,7 @@ slice in parallel — Android on Linux runners, iOS on macOS — then runs
 pull requests that touch this directory, and by hand from the Actions tab with
 two inputs:
 
-- `ffmpeg_version` — the release to build (default `9.0.1`).
+- `ffmpeg_version` — the release to build (default `9.0.2`).
 - `release_tag` — if set, the bundle and `build-info.txt` are attached to that
   GitHub release with `--clobber`.
 

@@ -67,7 +67,7 @@ shasum -a 256 "$ARCHIVE" | awk '{print $1}' > "$ARCHIVE.sha256"
 echo "==> build-info.txt"
 INFO="$OUTPUT/build-info.txt"
 {
-  echo "munim-ffmpeg $VERSION — FFmpeg ${FFMPEG_VERSION:-9.0.1}"
+  echo "munim-ffmpeg $VERSION — FFmpeg ${FFMPEG_VERSION:-9.0.2}"
   echo "built $(date -u +%Y-%m-%dT%H:%M:%SZ) on $(uname -sm)"
   echo
   echo "## External libraries"
@@ -98,7 +98,7 @@ cat > "$ROOT/scripts/binaries.json" <<EOF
 {
   "archive": "munim-ffmpeg-binaries.tar.gz",
   "sha256": "$(cat "$ARCHIVE.sha256")",
-  "ffmpeg": "${FFMPEG_VERSION:-9.0.1}"
+  "ffmpeg": "${FFMPEG_VERSION:-9.0.2}"
 }
 EOF
 

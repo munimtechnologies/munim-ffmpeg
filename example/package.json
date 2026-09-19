@@ -3,13 +3,14 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
-    "expo": "~57.0.20",
-    "expo-document-picker": "~57.0.1",
-    "expo-file-system": "~57.0.2",
+    "expo": "~57.0.24",
+    "expo-build-properties": "~57.0.21",
+    "expo-document-picker": "~57.0.2",
+    "expo-file-system": "~57.0.7",
     "expo-status-bar": "~57.0.1",
     "munim-ffmpeg": "file:..",
     "react": "19.2.3",
-    "react-native": "0.86.2",
+    "react-native": "0.86.3",
     "react-native-nitro-modules": "0.36.5"
   },
   "devDependencies": {

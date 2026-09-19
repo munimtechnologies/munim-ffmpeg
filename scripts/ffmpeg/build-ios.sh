@@ -21,7 +21,7 @@ esac
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE="${FFMPEG_WORKSPACE:-$HOME/.munim-ffmpeg-build}"
-SOURCE="$WORKSPACE/ffmpeg-${FFMPEG_VERSION:-9.0.1}"
+SOURCE="$WORKSPACE/ffmpeg-${FFMPEG_VERSION:-9.0.2}"
 DEPS="$WORKSPACE/deps"
 SLICE="$SDK_NAME-$ARCH"
 PREFIX="$WORKSPACE/out/ios-$SLICE"
@@ -85,8 +85,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libvpx.a" ]; then
   echo "  libvpx"
-  fetch "https://github.com/webmproject/libvpx/archive/refs/tags/v1.15.0.tar.gz" libvpx-1.15.0.tar.gz
-  unpack libvpx-1.15.0.tar.gz "libvpx-$SLICE"
+  fetch "https://github.com/webmproject/libvpx/archive/refs/tags/v1.17.0.tar.gz" libvpx-1.17.0.tar.gz
+  unpack libvpx-1.17.0.tar.gz "libvpx-$SLICE"
   (
     cd "$DEPS/libvpx-$SLICE"
     ./configure --target="$VPX_TARGET" --prefix="$PREFIX" \
@@ -99,8 +99,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libdav1d.a" ]; then
   echo "  dav1d"
-  fetch "https://code.videolan.org/videolan/dav1d/-/archive/1.5.1/dav1d-1.5.1.tar.gz" dav1d-1.5.1.tar.gz
-  unpack dav1d-1.5.1.tar.gz "dav1d-$SLICE"
+  fetch "https://code.videolan.org/videolan/dav1d/-/archive/1.5.4/dav1d-1.5.4.tar.gz" dav1d-1.5.4.tar.gz
+  unpack dav1d-1.5.4.tar.gz "dav1d-$SLICE"
   (
     cd "$DEPS/dav1d-$SLICE"
     [ "$ARCH" = "arm64" ] && MESON_CPU_FAMILY=aarch64 || MESON_CPU_FAMILY=x86_64
@@ -207,8 +207,8 @@ fi
 # through Core Text, so no fontconfig is needed.
 if [ ! -f "$PREFIX/lib/libfreetype.a" ]; then
   echo "  FreeType"
-  fetch "https://download.savannah.gnu.org/releases/freetype/freetype-2.13.3.tar.xz" freetype-2.13.3.tar.xz
-  unpack freetype-2.13.3.tar.xz "freetype-$SLICE"
+  fetch "https://download.savannah.gnu.org/releases/freetype/freetype-2.14.3.tar.xz" freetype-2.14.3.tar.xz
+  unpack freetype-2.14.3.tar.xz "freetype-$SLICE"
   (
     cd "$DEPS/freetype-$SLICE"
     PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig" \
@@ -232,8 +232,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libharfbuzz.a" ]; then
   echo "  HarfBuzz"
-  fetch "https://github.com/harfbuzz/harfbuzz/releases/download/10.1.0/harfbuzz-10.1.0.tar.xz" harfbuzz-10.1.0.tar.xz
-  unpack harfbuzz-10.1.0.tar.xz "harfbuzz-$SLICE"
+  fetch "https://github.com/harfbuzz/harfbuzz/releases/download/14.4.0/harfbuzz-14.4.0.tar.xz" harfbuzz-14.4.0.tar.xz
+  unpack harfbuzz-14.4.0.tar.xz "harfbuzz-$SLICE"
   (
     cd "$DEPS/harfbuzz-$SLICE"
     [ "$ARCH" = "arm64" ] && MESON_CPU_FAMILY=aarch64 || MESON_CPU_FAMILY=x86_64
@@ -261,15 +261,15 @@ EOF
       --default-library=static --buildtype=release \
       -Dfreetype=enabled -Dglib=disabled -Dgobject=disabled -Dcairo=disabled \
       -Dicu=disabled -Dtests=disabled -Ddocs=disabled -Dbenchmark=disabled \
-      -Dintrospection=disabled -Dutilities=disabled -Dcoretext=disabled
+      -Dintrospection=disabled -Dutilities=disabled -Draster=disabled -Dvector=disabled -Dgpu=disabled -Dgpu_demo=disabled -Dsubset=disabled -Dcoretext=disabled
     ninja -C build && ninja -C build install
   ) > "$WORKSPACE/build/harfbuzz-$SLICE.log" 2>&1
 fi
 
 if [ ! -f "$PREFIX/lib/libass.a" ]; then
   echo "  libass"
-  fetch "https://github.com/libass/libass/releases/download/0.17.4/libass-0.17.4.tar.xz" libass-0.17.4.tar.xz
-  unpack libass-0.17.4.tar.xz "libass-$SLICE"
+  fetch "https://github.com/libass/libass/releases/download/0.17.5/libass-0.17.5.tar.xz" libass-0.17.5.tar.xz
+  unpack libass-0.17.5.tar.xz "libass-$SLICE"
   (
     cd "$DEPS/libass-$SLICE"
     PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig" \
