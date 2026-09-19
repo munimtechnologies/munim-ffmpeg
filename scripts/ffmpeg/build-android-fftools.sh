@@ -12,7 +12,7 @@ TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/$HOST_TAG"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE="${FFMPEG_WORKSPACE:-$HOME/.munim-ffmpeg-build}"
-SOURCE="$WORKSPACE/ffmpeg-${FFMPEG_VERSION:-9.0.1}"
+SOURCE="$WORKSPACE/ffmpeg-${FFMPEG_VERSION:-9.0.2}"
 PREFIX="$WORKSPACE/out/android-$ABI"
 BUILD="$WORKSPACE/build/android-$ABI"
 WORK="$WORKSPACE/build/fftools-$ABI"

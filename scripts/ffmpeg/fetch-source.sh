@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Downloads the FFmpeg release the package builds against.
 set -euo pipefail
-VERSION="${FFMPEG_VERSION:-9.0.1}"
+VERSION="${FFMPEG_VERSION:-9.0.2}"
 WORKSPACE="${FFMPEG_WORKSPACE:-$HOME/.munim-ffmpeg-build}"
 mkdir -p "$WORKSPACE"
 cd "$WORKSPACE"

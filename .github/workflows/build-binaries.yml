@@ -14,7 +14,7 @@ on:
     inputs:
       ffmpeg_version:
         description: FFmpeg release to build
-        default: '9.0.1'
+        default: '9.0.2'
       release_tag:
         description: >-
           Attach the bundle to this GitHub release (for example v0.6.0). Leave
@@ -30,7 +30,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  FFMPEG_VERSION: ${{ inputs.ffmpeg_version || '9.0.1' }}
+  FFMPEG_VERSION: ${{ inputs.ffmpeg_version || '9.0.2' }}
   FFMPEG_WORKSPACE: ${{ github.workspace }}/.build
   NDK_VERSION: 27.1.12297006
 
@@ -85,6 +85,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          retention-days: 1
           name: logs-android-${{ matrix.abi }}
           path: ${{ env.FFMPEG_WORKSPACE }}/build/*.log
           if-no-files-found: ignore
@@ -92,6 +93,7 @@ jobs:
       - name: Upload slice
         uses: actions/upload-artifact@v4
         with:
+          retention-days: 1
           name: slice-android-${{ matrix.abi }}
           if-no-files-found: error
           path: |
@@ -137,6 +139,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          retention-days: 1
           name: logs-ios-${{ matrix.sdk }}-${{ matrix.arch }}
           path: ${{ env.FFMPEG_WORKSPACE }}/build/*.log
           if-no-files-found: ignore
@@ -144,6 +147,7 @@ jobs:
       - name: Upload slice
         uses: actions/upload-artifact@v4
         with:
+          retention-days: 1
           name: slice-ios-${{ matrix.sdk }}-${{ matrix.arch }}
           if-no-files-found: error
           path: |
@@ -194,6 +198,7 @@ jobs:
       - name: Upload bundle
         uses: actions/upload-artifact@v4
         with:
+          retention-days: 1
           name: munim-ffmpeg-binaries
           if-no-files-found: error
           path: |

@@ -94,7 +94,7 @@
 ### FFmpeg execution
 
 - 🎬 **Argument-array commands:** FFmpeg's own CLI code paths, without shell parsing or quoting
-- 🆕 **FFmpeg 9.0.1:** The current upstream release, identical on both platforms
+- 🆕 **FFmpeg 9.0.2:** The current upstream release, identical on both platforms
 - ⚡ **Asynchronous sessions:** Keep the React Native thread responsive during native work
 - 📝 **Live logs:** Receive FFmpeg output as it is produced
 - 📈 **Encoding statistics:** Track time, size, bitrate, speed, frames, FPS, and quality
@@ -183,11 +183,11 @@ await execute([
 
 ## Bundled FFmpeg builds
 
-Both platforms run **FFmpeg 9.0.1**, built from [ffmpeg.org](https://www.ffmpeg.org/) by the scripts in [`scripts/ffmpeg/`](./scripts/ffmpeg). There is no FFmpegKit here: that project was retired in 2025 and pinned to FFmpeg 6.0.
+Both platforms run **FFmpeg 9.0.2**, built from [ffmpeg.org](https://www.ffmpeg.org/) by the scripts in [`scripts/ffmpeg/`](./scripts/ffmpeg). There is no FFmpegKit here: that project was retired in 2025 and pinned to FFmpeg 6.0.
 
 |                 | iOS                                                     | Android                         |
 | --------------- | ------------------------------------------------------- | ------------------------------- |
-| FFmpeg          | 9.0.1                                                   | 9.0.1                           |
+| FFmpeg          | 9.0.2                                                   | 9.0.2                           |
 | Architectures   | arm64 device, arm64 + x86_64 simulator                  | arm64-v8a, armeabi-v7a, x86_64  |
 | Hardware codecs | VideoToolbox, AudioToolbox                              | MediaCodec                      |
 | TLS             | SecureTransport                                         | mbedTLS                         |
@@ -882,7 +882,7 @@ if (result.success) {
 
 The JavaScript, TypeScript, Swift, Kotlin, C core, and generated Nitro bridge in this repository are Apache-2.0.
 
-The bundled FFmpeg 9.0.1 is **LGPLv3**, on both platforms. It is configured without `--enable-gpl`, so no x264, x265, xvid, or vid.stab. The external libraries it links are LAME (LGPL), Opus (BSD), libvpx (BSD), dav1d (BSD), libaom (BSD 2-clause with the Alliance for Open Media patent licence), openh264 (BSD 2-clause), libass (ISC), FreeType (FTL, BSD-style with credit), HarfBuzz (MIT-style), FriBidi (LGPL), and, on Android only, mbedTLS (Apache-2.0), fontconfig (MIT-style), and expat (MIT). None of them change the LGPL story.
+The bundled FFmpeg 9.0.2 is **LGPLv3**, on both platforms. It is configured without `--enable-gpl`, so no x264, x265, xvid, or vid.stab. The external libraries it links are LAME (LGPL), Opus (BSD), libvpx (BSD), dav1d (BSD), libaom (BSD 2-clause with the Alliance for Open Media patent licence), openh264 (BSD 2-clause), libass (ISC), FreeType (FTL, BSD-style with credit), HarfBuzz (MIT-style), FriBidi (LGPL), and, on Android only, mbedTLS (Apache-2.0), fontconfig (MIT-style), and expat (MIT). None of them change the LGPL story.
 
 > **A note on H.264 patents.** Hardware encoders are covered by the licences device manufacturers already pay for. Software H.264 encoding through `libopenh264` is not: Cisco's royalty coverage applies to _their_ prebuilt binary, and this package builds openh264 from source. If you ship software H.264 encoding at scale, check where you stand with AVC licensing. Hardware encoders avoid the question entirely, which is why `pickEncoder` should list them first.
 
