@@ -147,13 +147,12 @@ Codec availability is determined by the native FFmpeg builds described in [Bundl
 
 ## Where this is verified
 
-Every release runs the example's 25-check device suite. For 0.4.x:
+Every release runs the example's device suite (33 checks, including pause/resume). For 0.8.x:
 
 | Target                     | Result                                                           |
 | -------------------------- | ---------------------------------------------------------------- |
-| iPad Air (M3), iOS 26      | 25/25                                                            |
-| iOS Simulator, arm64       | 25/25                                                            |
-| Galaxy A14 5G, arm64-v8a   | 25/25                                                            |
+| iPad Air (M3), iPadOS 27   | 33/33                                                            |
+| Galaxy A14 5G, arm64-v8a   | 33/33                                                            |
 | Android emulator, arm64    | Software encoding passes; hardware encoding does not — see below |
 | Android emulator, `x86_64` | Same: `libopenh264` passes, MediaCodec does not                  |
 | Android `armeabi-v7a`      | Built and statically checked, not executed                       |
