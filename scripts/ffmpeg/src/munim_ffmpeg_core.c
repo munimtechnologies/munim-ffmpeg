@@ -10,6 +10,7 @@
 
 #include "libavutil/avutil.h"
 #include "libavutil/log.h"
+#include "libavutil/time.h"
 
 /* Provided by FFmpeg's fftools, compiled with -Dmain=ffmpeg_main / ffprobe_main
  * plus the small hooks appended by the build script. */
@@ -24,6 +25,19 @@ static pthread_mutex_t execution_lock = PTHREAD_MUTEX_INITIALIZER;
 /* Bumped by every cancel so a run still queued behind the lock is cancelled
  * too, rather than starting after the user asked to stop. */
 static volatile unsigned long cancel_epoch;
+
+/*
+ * Pause state, keyed by session id. `paused_sessions` holds every session the
+ * caller paused, running or queued; `running_session` (0 = none) and
+ * `running_epoch` identify the execution the fftools pause hook belongs to.
+ */
+#define MAX_PAUSED_SESSIONS 64
+static pthread_mutex_t pause_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t pause_changed = PTHREAD_COND_INITIALIZER;
+static long long paused_sessions[MAX_PAUSED_SESSIONS];
+static int nb_paused_sessions;
+static long long running_session;
+static unsigned long running_epoch;
 
 static munim_log_callback log_callback_fn;
 static munim_statistics_callback statistics_callback_fn;
@@ -166,8 +180,97 @@ static void free_arguments(char **argv, int count)
     free(argv);
 }
 
-int munim_ffmpeg_execute_ctx(int argc, const char *const *argv,
-                             const char *stdout_path, void *session)
+/* Callers hold pause_lock. */
+static int paused_index(long long session)
+{
+    for (int i = 0; i < nb_paused_sessions; i++)
+        if (paused_sessions[i] == session) return i;
+    return -1;
+}
+
+static void forget_paused(long long session)
+{
+    int index = paused_index(session);
+    if (index < 0) return;
+    paused_sessions[index] = paused_sessions[--nb_paused_sessions];
+}
+
+int munim_ffmpeg_pause(long long session)
+{
+    if (session <= 0) return 0;
+    pthread_mutex_lock(&pause_lock);
+    if (paused_index(session) < 0 && nb_paused_sessions < MAX_PAUSED_SESSIONS)
+        paused_sessions[nb_paused_sessions++] = session;
+    int running = running_session == session;
+    pthread_mutex_unlock(&pause_lock);
+    return running;
+}
+
+int munim_ffmpeg_resume(long long session)
+{
+    if (session <= 0) return 0;
+    pthread_mutex_lock(&pause_lock);
+    int was_paused = paused_index(session) >= 0;
+    forget_paused(session);
+    pthread_cond_broadcast(&pause_changed);
+    pthread_mutex_unlock(&pause_lock);
+    return was_paused;
+}
+
+int munim_ffmpeg_is_paused(long long session)
+{
+    if (session <= 0) return 0;
+    pthread_mutex_lock(&pause_lock);
+    int paused = paused_index(session) >= 0;
+    pthread_mutex_unlock(&pause_lock);
+    return paused;
+}
+
+long long munim_ffmpeg_running_session(void)
+{
+    pthread_mutex_lock(&pause_lock);
+    long long session = running_session;
+    pthread_mutex_unlock(&pause_lock);
+    return session;
+}
+
+/* Called by the patched fftools input and source-filter threads. */
+int64_t munim_ffmpeg_hook_wait_while_paused(void)
+{
+    int64_t waited = 0;
+    pthread_mutex_lock(&pause_lock);
+    if (running_session && paused_index(running_session) >= 0 &&
+        running_epoch == cancel_epoch) {
+        int64_t started = av_gettime_relative();
+        while (running_session && paused_index(running_session) >= 0 &&
+               running_epoch == cancel_epoch)
+            pthread_cond_wait(&pause_changed, &pause_lock);
+        waited = av_gettime_relative() - started;
+    }
+    pthread_mutex_unlock(&pause_lock);
+    return waited;
+}
+
+static void begin_running(long long session, unsigned long epoch)
+{
+    pthread_mutex_lock(&pause_lock);
+    running_session = session;
+    running_epoch = epoch;
+    pthread_mutex_unlock(&pause_lock);
+}
+
+static void end_running(long long session)
+{
+    pthread_mutex_lock(&pause_lock);
+    running_session = 0;
+    forget_paused(session);
+    pthread_cond_broadcast(&pause_changed);
+    pthread_mutex_unlock(&pause_lock);
+}
+
+int munim_ffmpeg_execute_session(int argc, const char *const *argv,
+                                 const char *stdout_path, void *session,
+                                 long long session_id)
 {
     unsigned long epoch = cancel_epoch;
     char **arguments = copy_arguments("ffmpeg", argc, argv, 0);
@@ -186,9 +289,11 @@ int munim_ffmpeg_execute_ctx(int argc, const char *const *argv,
         if (session) callback_context = session;
         munim_ffmpeg_hook_reset();
         reset_log_level();
+        begin_running(session_id, epoch);
         int saved = redirect_stdout(stdout_path);
         ret = ffmpeg_main(argc + 1, arguments);
         restore_stdout(saved);
+        end_running(session_id);
         callback_context = default_context;
     }
     pthread_mutex_unlock(&execution_lock);
@@ -197,14 +302,21 @@ int munim_ffmpeg_execute_ctx(int argc, const char *const *argv,
     return ret;
 }
 
+int munim_ffmpeg_execute_ctx(int argc, const char *const *argv,
+                             const char *stdout_path, void *session)
+{
+    return munim_ffmpeg_execute_session(argc, argv, stdout_path, session, 0);
+}
+
 int munim_ffmpeg_execute(int argc, const char *const *argv,
                          const char *stdout_path)
 {
     return munim_ffmpeg_execute_ctx(argc, argv, stdout_path, NULL);
 }
 
-int munim_ffmpeg_probe_ctx(int argc, const char *const *argv,
-                           const char *output_path, void *session)
+int munim_ffmpeg_probe_session(int argc, const char *const *argv,
+                               const char *output_path, void *session,
+                               long long session_id)
 {
     unsigned long epoch = cancel_epoch;
     char **arguments = copy_arguments("ffprobe", argc, argv, 2);
@@ -227,13 +339,21 @@ int munim_ffmpeg_probe_ctx(int argc, const char *const *argv,
         if (session) callback_context = session;
         munim_ffprobe_hook_reset();
         reset_log_level();
+        begin_running(session_id, epoch);
         ret = ffprobe_main(total, arguments);
+        end_running(session_id);
         callback_context = default_context;
     }
     pthread_mutex_unlock(&execution_lock);
 
     free_arguments(arguments, total);
     return ret;
+}
+
+int munim_ffmpeg_probe_ctx(int argc, const char *const *argv,
+                           const char *output_path, void *session)
+{
+    return munim_ffmpeg_probe_session(argc, argv, output_path, session, 0);
 }
 
 int munim_ffmpeg_probe(int argc, const char *const *argv,
@@ -244,6 +364,12 @@ int munim_ffmpeg_probe(int argc, const char *const *argv,
 
 void munim_ffmpeg_cancel(void)
 {
+    pthread_mutex_lock(&pause_lock);
     cancel_epoch++;
+    /* Cancelling also clears every pause, so a queued session that was paused
+     * does not linger in the list. */
+    nb_paused_sessions = 0;
+    pthread_cond_broadcast(&pause_changed);
+    pthread_mutex_unlock(&pause_lock);
     munim_ffmpeg_hook_cancel();
 }

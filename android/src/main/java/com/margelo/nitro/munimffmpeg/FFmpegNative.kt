@@ -79,15 +79,26 @@ object FFmpegNative {
     arguments: Array<String>,
     stdoutPath: String,
     session: FFmpegSession,
+    sessionId: Long,
   ): Int
 
   external fun nativeExecuteProbe(
     arguments: Array<String>,
     outputPath: String,
     session: FFmpegSession,
+    sessionId: Long,
   ): Int
 
   external fun nativeCancel()
+
+  external fun nativePause(sessionId: Long): Boolean
+
+  external fun nativeResume(sessionId: Long): Boolean
+
+  external fun nativeIsPaused(sessionId: Long): Boolean
+
+  /** Id of the execution or probe currently running, or 0. */
+  external fun nativeRunningSession(): Long
 
   /**
    * libass discovers fonts through fontconfig, and Android has no fonts.conf,

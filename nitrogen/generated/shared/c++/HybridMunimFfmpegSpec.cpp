@@ -20,6 +20,9 @@ namespace margelo::nitro::munimffmpeg {
       prototype.registerHybridMethod("getMediaInformation", &HybridMunimFfmpegSpec::getMediaInformation);
       prototype.registerHybridMethod("cancel", &HybridMunimFfmpegSpec::cancel);
       prototype.registerHybridMethod("cancelAll", &HybridMunimFfmpegSpec::cancelAll);
+      prototype.registerHybridMethod("pause", &HybridMunimFfmpegSpec::pause);
+      prototype.registerHybridMethod("resume", &HybridMunimFfmpegSpec::resume);
+      prototype.registerHybridMethod("getSessionState", &HybridMunimFfmpegSpec::getSessionState);
     });
   }
 

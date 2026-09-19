@@ -15,6 +15,8 @@
 
 // Forward declaration of `FFmpegSessionResult` to properly resolve imports.
 namespace margelo::nitro::munimffmpeg { struct FFmpegSessionResult; }
+// Forward declaration of `FFmpegSessionState` to properly resolve imports.
+namespace margelo::nitro::munimffmpeg { enum class FFmpegSessionState; }
 
 #include <string>
 #include "FFmpegSessionResult.hpp"
@@ -22,6 +24,7 @@ namespace margelo::nitro::munimffmpeg { struct FFmpegSessionResult; }
 #include <vector>
 #include <functional>
 #include <optional>
+#include "FFmpegSessionState.hpp"
 
 namespace margelo::nitro::munimffmpeg {
 
@@ -59,6 +62,9 @@ namespace margelo::nitro::munimffmpeg {
       virtual std::shared_ptr<Promise<std::string>> getMediaInformation(const std::string& path) = 0;
       virtual void cancel(std::optional<double> sessionId) = 0;
       virtual void cancelAll() = 0;
+      virtual bool pause(double sessionId) = 0;
+      virtual bool resume(double sessionId) = 0;
+      virtual FFmpegSessionState getSessionState(double sessionId) = 0;
 
     protected:
       // Hybrid Setup

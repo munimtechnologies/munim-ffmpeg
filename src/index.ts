@@ -3,6 +3,7 @@ import type {
   FFmpegLogCallback,
   FFmpegSessionResult,
   FFmpegSessionCreatedCallback,
+  FFmpegSessionState,
   FFmpegStatisticsCallback,
   MunimFfmpeg as MunimFfmpegSpec,
 } from './specs/MunimFfmpeg.nitro'
@@ -14,6 +15,7 @@ export type {
   FFmpegLogCallback,
   FFmpegSessionResult,
   FFmpegSessionCreatedCallback,
+  FFmpegSessionState,
   FFmpegStatisticsCallback,
   MunimFfmpegSpec,
 }
@@ -175,6 +177,29 @@ export function cancel(sessionId?: number): void {
 
 export function cancelAll(): void {
   MunimFfmpeg.cancelAll()
+}
+
+/**
+ * Pauses a session started with `execute()`, whether it is running or still
+ * queued. FFmpeg stops reading its inputs and the rest of the pipeline idles
+ * once it has drained, so a paused session costs no CPU. Output files stay
+ * open, and `resume()` continues from exactly where it stopped: nothing is
+ * re-encoded or skipped, and the `execute()` promise settles once, when the
+ * work finishes. `cancel()` still works while paused.
+ *
+ * Returns false if the session is unknown, has finished, or is a probe.
+ */
+export function pause(sessionId: number): boolean {
+  return MunimFfmpeg.pause(sessionId)
+}
+
+/** Resumes a paused session. Returns false if it was not paused. */
+export function resume(sessionId: number): boolean {
+  return MunimFfmpeg.resume(sessionId)
+}
+
+export function getSessionState(sessionId: number): FFmpegSessionState {
+  return MunimFfmpeg.getSessionState(sessionId)
 }
 
 export function getFFmpegVersion(): string {

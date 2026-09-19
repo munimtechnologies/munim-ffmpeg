@@ -10,11 +10,14 @@
 // Forward declarations of C++ defined types
 // Forward declaration of `FFmpegSessionResult` to properly resolve imports.
 namespace margelo::nitro::munimffmpeg { struct FFmpegSessionResult; }
+// Forward declaration of `FFmpegSessionState` to properly resolve imports.
+namespace margelo::nitro::munimffmpeg { enum class FFmpegSessionState; }
 // Forward declaration of `HybridMunimFfmpegSpec` to properly resolve imports.
 namespace margelo::nitro::munimffmpeg { class HybridMunimFfmpegSpec; }
 
 // Include C++ defined types
 #include "FFmpegSessionResult.hpp"
+#include "FFmpegSessionState.hpp"
 #include "HybridMunimFfmpegSpec.hpp"
 #include <NitroModules/Promise.hpp>
 #include <NitroModules/Result.hpp>

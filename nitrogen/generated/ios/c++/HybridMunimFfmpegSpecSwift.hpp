@@ -14,6 +14,8 @@ namespace NitroMunimFfmpeg { class HybridMunimFfmpegSpec_cxx; }
 
 // Forward declaration of `FFmpegSessionResult` to properly resolve imports.
 namespace margelo::nitro::munimffmpeg { struct FFmpegSessionResult; }
+// Forward declaration of `FFmpegSessionState` to properly resolve imports.
+namespace margelo::nitro::munimffmpeg { enum class FFmpegSessionState; }
 
 #include <string>
 #include "FFmpegSessionResult.hpp"
@@ -21,6 +23,7 @@ namespace margelo::nitro::munimffmpeg { struct FFmpegSessionResult; }
 #include <optional>
 #include <vector>
 #include <functional>
+#include "FFmpegSessionState.hpp"
 
 #include "NitroMunimFfmpeg-Swift-Cxx-Umbrella.hpp"
 
@@ -110,6 +113,30 @@ namespace margelo::nitro::munimffmpeg {
       if (__result.hasError()) [[unlikely]] {
         std::rethrow_exception(__result.error());
       }
+    }
+    inline bool pause(double sessionId) override {
+      auto __result = _swiftPart.pause(std::forward<decltype(sessionId)>(sessionId));
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+      auto __value = std::move(__result.value());
+      return __value;
+    }
+    inline bool resume(double sessionId) override {
+      auto __result = _swiftPart.resume(std::forward<decltype(sessionId)>(sessionId));
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+      auto __value = std::move(__result.value());
+      return __value;
+    }
+    inline FFmpegSessionState getSessionState(double sessionId) override {
+      auto __result = _swiftPart.getSessionState(std::forward<decltype(sessionId)>(sessionId));
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+      auto __value = std::move(__result.value());
+      return __value;
     }
 
   private:

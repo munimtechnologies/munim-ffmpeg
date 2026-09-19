@@ -6,6 +6,7 @@ import {
   getFFmpegVersion,
   getMediaDuration,
   getMediaInformation,
+  getSessionState,
   listDecoders,
   listDemuxers,
   listEncoders,
@@ -13,8 +14,10 @@ import {
   listMuxers,
   listProtocols,
   normalizePath,
+  pause,
   pickEncoder,
   probe,
+  resume,
 } from 'munim-ffmpeg'
 
 import { RAW_VIDEO, rawVideoFrames, wavFixture } from './fixture'
@@ -401,6 +404,148 @@ export async function runSuite(
       const result = await execution
       assert(result.cancelled, `session ended in state ${result.state}`)
       return `session ${sessionId} cancelled after ${result.durationMs} ms`
+    })
+  )
+
+  record(
+    await run(
+      'Pauses and resumes a session without losing output',
+      async () => {
+        const paused = new File(directory, 'paused.mp4')
+        const seconds = 20
+        let sessionId: number | undefined
+        let lastTimeMs = 0
+        const sleep = (ms: number) =>
+          new Promise((resolve) => setTimeout(resolve, ms))
+
+        const execution = execute(
+          [
+            '-y',
+            '-hide_banner',
+            '-stream_loop',
+            '-1',
+            ...rawVideoInput(raw.uri),
+            '-t',
+            String(seconds),
+            '-vf',
+            'scale=1280:720',
+            ...videoEncoderArguments(h264 ?? 'mpeg4'),
+            paused.uri,
+          ],
+          undefined,
+          (timeMs) => {
+            lastTimeMs = timeMs
+          },
+          (id) => {
+            sessionId = id
+          }
+        )
+
+        await sleep(700)
+        assert(sessionId !== undefined, 'never received a session ID')
+        assert(pause(sessionId), 'pause() returned false for a running session')
+        assert(
+          getSessionState(sessionId) === 'paused',
+          `state after pause: ${getSessionState(sessionId)}`
+        )
+
+        // Let frames already inside the pipeline drain, then expect no progress.
+        await sleep(800)
+        const pausedAt = lastTimeMs
+        await sleep(1500)
+        assert(
+          lastTimeMs === pausedAt,
+          `progress moved while paused: ${pausedAt} -> ${lastTimeMs} ms`
+        )
+        assert(pausedAt < seconds * 1000, 'finished before it could be paused')
+
+        assert(
+          resume(sessionId),
+          'resume() returned false for a paused session'
+        )
+        assert(
+          getSessionState(sessionId) === 'running',
+          `state after resume: ${getSessionState(sessionId)}`
+        )
+        assert(
+          !resume(sessionId),
+          'resume() of a running session returned true'
+        )
+
+        const result = await execution
+        assert(
+          result.success,
+          `session ended with return code ${result.returnCode}`
+        )
+        assert(
+          getSessionState(sessionId) === 'completed',
+          `final state: ${getSessionState(sessionId)}`
+        )
+        assert(!pause(sessionId), 'pause() of a finished session returned true')
+
+        const duration = getMediaDuration(await getMediaInformation(paused.uri))
+        assert(
+          duration !== undefined && Math.abs(duration - seconds) < 0.5,
+          `output lasts ${duration} s, expected ${seconds} s`
+        )
+        return `held at ${(pausedAt / 1000).toFixed(1)} s for 1.5 s, finished ${duration?.toFixed(2)} s of ${seconds} s`
+      }
+    )
+  )
+
+  record(
+    await run('Cancels a paused session and pauses a queued one', async () => {
+      const longRun = (name: string, onSession: (id: number) => void) =>
+        execute(
+          [
+            '-y',
+            '-hide_banner',
+            '-stream_loop',
+            '-1',
+            ...rawVideoInput(raw.uri),
+            '-t',
+            '600',
+            '-vf',
+            'scale=1280:720',
+            ...videoEncoderArguments(h264 ?? 'mpeg4'),
+            new File(directory, name).uri,
+          ],
+          undefined,
+          undefined,
+          onSession
+        )
+
+      let first: number | undefined
+      let second: number | undefined
+      const running = longRun('paused-running.mp4', (id) => {
+        first = id
+      })
+      const queued = longRun('paused-queued.mp4', (id) => {
+        second = id
+      })
+      await new Promise((resolve) => setTimeout(resolve, 700))
+      assert(first !== undefined && second !== undefined, 'missing session IDs')
+      assert(
+        getSessionState(second) === 'queued',
+        `second session state: ${getSessionState(second)}`
+      )
+      assert(pause(first) && pause(second), 'pause() returned false')
+      assert(
+        getSessionState(second) === 'paused',
+        `queued session after pause: ${getSessionState(second)}`
+      )
+
+      cancelAll()
+      const results = await Promise.all([running, queued])
+      assert(
+        results.every((result) => result.cancelled),
+        `cancelled flags: ${results.map((result) => result.cancelled).join(', ')}`
+      )
+      assert(
+        getSessionState(first) === 'cancelled',
+        `first session final state: ${getSessionState(first)}`
+      )
+      return `paused sessions ${first} (running) and ${second} (queued) both cancelled`
     })
   )
 

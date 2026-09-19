@@ -18,6 +18,9 @@ public protocol HybridMunimFfmpegSpec_protocol: HybridObject {
   func getMediaInformation(path: String) throws -> Promise<String>
   func cancel(sessionId: Double?) throws -> Void
   func cancelAll() throws -> Void
+  func pause(sessionId: Double) throws -> Bool
+  func resume(sessionId: Double) throws -> Bool
+  func getSessionState(sessionId: Double) throws -> FFmpegSessionState
 }
 
 public extension HybridMunimFfmpegSpec_protocol {
