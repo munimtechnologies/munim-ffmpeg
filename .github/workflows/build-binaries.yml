@@ -44,7 +44,7 @@ jobs:
       matrix:
         abi: [arm64-v8a, armeabi-v7a, x86_64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # fontconfig 2.16 needs Meson 1.6+, newer than the apt package, so Meson
       # comes from pip.
@@ -65,7 +65,7 @@ jobs:
           echo "ANDROID_NDK=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
 
       - name: Cache dependency sources
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ env.FFMPEG_WORKSPACE }}/deps/*.tar.*
           key: deps-${{ hashFiles('scripts/ffmpeg/build-android.sh', 'scripts/ffmpeg/build-ios.sh') }}
@@ -79,11 +79,21 @@ jobs:
         run: |
           lib="$FFMPEG_WORKSPACE/out/android-${{ matrix.abi }}/lib/libmunimffmpeg.so"
           ls -la "$lib"
-          "$ANDROID_NDK"/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf -d "$lib" | grep NEEDED
+          readelf="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          "$readelf" -d "$lib" | grep NEEDED
+          # Google Play requires 16 KB page alignment on 64-bit ABIs; the
+          # build links every ABI that way, so any smaller LOAD alignment fails.
+          "$readelf" -lW "$lib" | grep -E 'LOAD|GNU_RELRO'
+          for align in $("$readelf" -lW "$lib" | awk '$1 == "LOAD" { print $NF }'); do
+            if [ $((align)) -lt 16384 ]; then
+              echo "::error::$lib has a LOAD segment aligned to $align, below 16 KB"
+              exit 1
+            fi
+          done
 
       - name: Upload build logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           retention-days: 1
           name: logs-android-${{ matrix.abi }}
@@ -91,7 +101,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload slice
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           retention-days: 1
           name: slice-android-${{ matrix.abi }}
@@ -113,13 +123,13 @@ jobs:
           - { sdk: iphonesimulator, arch: arm64 }
           - { sdk: iphonesimulator, arch: x86_64 }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install build tools
         run: brew install meson ninja nasm yasm pkg-config gperf autoconf automake libtool
 
       - name: Cache dependency sources
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ env.FFMPEG_WORKSPACE }}/deps/*.tar.*
           key: deps-${{ hashFiles('scripts/ffmpeg/build-android.sh', 'scripts/ffmpeg/build-ios.sh') }}
@@ -137,7 +147,7 @@ jobs:
 
       - name: Upload build logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           retention-days: 1
           name: logs-ios-${{ matrix.sdk }}-${{ matrix.arch }}
@@ -145,7 +155,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload slice
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           retention-days: 1
           name: slice-ios-${{ matrix.sdk }}-${{ matrix.arch }}
@@ -161,15 +171,15 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
 
       # Every slice artifact was uploaded relative to the workspace root, so
       # merging them recreates the out/ and build/ layout package.sh expects.
       - name: Collect slices
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: slice-*
           path: ${{ env.FFMPEG_WORKSPACE }}
@@ -196,7 +206,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           retention-days: 1
           name: munim-ffmpeg-binaries

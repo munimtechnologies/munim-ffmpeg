@@ -1,5 +1,5 @@
 project(NitroMunimFfmpeg)
-cmake_minimum_required(VERSION 3.9.0)
+cmake_minimum_required(VERSION 3.13)
 
 set (PACKAGE_NAME NitroMunimFfmpeg)
 set (CMAKE_VERBOSE_MAKEFILE ON)
@@ -20,6 +20,16 @@ include_directories(
 )
 
 find_library(LOG_LIB log)
+
+# 16 KB page sizes: NDK r27 only aligns to 16 KB when the app opts in with
+# ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES (build.gradle passes it), and older NDKs
+# ignore that flag, so the linker is told directly as well.
+target_link_options(
+        ${PACKAGE_NAME}
+        PRIVATE
+        "-Wl,-z,max-page-size=16384"
+        "-Wl,-z,common-page-size=16384"
+)
 
 # Link all libraries together
 target_link_libraries(

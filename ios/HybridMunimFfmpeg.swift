@@ -55,6 +55,28 @@ private let installCallbacks: Void = munim_ffmpeg_set_callbacks({ context, messa
   session.onStatistics?(timeMs, sizeBytes, bitrate, speed, frame, fps, quality)
 }, nil)
 
+/// FFmpeg registers Apple's supplemental AV1 and VP9 decoders only on macOS.
+/// iOS 26.2 added the same VideoToolbox call, so it is made here once before
+/// the first run, letting `-hwaccel videotoolbox` reach those decoders. It is
+/// looked up at runtime because SDKs before iOS 26.2 do not declare it for iOS;
+/// on older systems, or if the symbol is missing, this does nothing.
+private let registerSupplementalDecoders: Void = {
+  guard #available(iOS 26.2, *) else { return }
+  // RTLD_DEFAULT is a C macro Swift cannot import: ((void *)-2) on Darwin.
+  guard
+    let symbol = dlsym(
+      UnsafeMutableRawPointer(bitPattern: -2),
+      "VTRegisterSupplementalVideoDecoderIfAvailable"
+    )
+  else { return }
+  typealias Register = @convention(c) (UInt32) -> Void
+  let register = unsafeBitCast(symbol, to: Register.self)
+  // kCMVideoCodecType_AV1 ('av01') and kCMVideoCodecType_VP9 ('vp09').
+  for codec: UInt32 in [0x6176_3031, 0x7670_3039] {
+    register(codec)
+  }
+}()
+
 /// What the module remembers about each session id. Whether an unfinished
 /// session is queued, running or paused is asked of the C core, which is the
 /// only place that knows.
@@ -158,6 +180,7 @@ final class HybridMunimFfmpeg: HybridMunimFfmpegSpec {
       let printedPath = Self.temporaryFile()
 
       _ = installCallbacks
+      _ = registerSupplementalDecoders
       let session = Session(onLog: onLog, onStatistics: onStatistics)
 
       let returnCode = withExtendedLifetime(session) {
@@ -257,6 +280,7 @@ final class HybridMunimFfmpeg: HybridMunimFfmpegSpec {
     let destination = temporaryFile()
 
     _ = installCallbacks
+    _ = registerSupplementalDecoders
     let session = Session(onLog: onLog)
 
     let returnCode = withExtendedLifetime(session) {

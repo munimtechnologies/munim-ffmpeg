@@ -75,6 +75,7 @@ module.exports = {
           'CHANGELOG.md',
           'example/package.json',
           'scripts/binaries.json',
+          'package-lock.json',
         ],
       },
     ],

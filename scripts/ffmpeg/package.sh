@@ -17,6 +17,10 @@ rm -rf "$STAGE" "$OUTPUT"
 mkdir -p "$STAGE/android/src/main/jniLibs" "$STAGE/ios" "$OUTPUT"
 
 echo "==> Android"
+# Google Play requires 16 KB page alignment for 64-bit native libraries.
+NDK="${ANDROID_NDK:-${ANDROID_NDK_HOME:-${ANDROID_NDK_LATEST_HOME:-/opt/homebrew/share/android-commandlinetools/ndk/27.1.12297006}}}"
+READELF="$(ls "$NDK"/toolchains/llvm/prebuilt/*/bin/llvm-readelf 2>/dev/null | head -1 || true)"
+[ -n "$READELF" ] || READELF="$(command -v llvm-readelf || true)"
 for abi in arm64-v8a armeabi-v7a x86_64; do
   source="$WORKSPACE/out/android-$abi/lib"
   if [ ! -f "$source/libmunimffmpeg.so" ]; then
@@ -25,6 +29,14 @@ for abi in arm64-v8a armeabi-v7a x86_64; do
   fi
   # One library per ABI: FFmpeg and every dependency are linked in statically.
   mkdir -p "$STAGE/android/src/main/jniLibs/$abi"
+  if [ -n "$READELF" ]; then
+    for align in $("$READELF" -lW "$source/libmunimffmpeg.so" | awk '$1 == "LOAD" { print $NF }'); do
+      if [ $((align)) -lt 16384 ]; then
+        echo "  $abi: LOAD segment aligned to $align, below 16 KB" >&2
+        exit 1
+      fi
+    done
+  fi
   cp "$source/libmunimffmpeg.so" "$STAGE/android/src/main/jniLibs/$abi/"
   echo "  $abi: $(du -sh "$STAGE/android/src/main/jniLibs/$abi" | cut -f1)"
 done
