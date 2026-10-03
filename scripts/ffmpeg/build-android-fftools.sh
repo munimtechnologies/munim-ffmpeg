@@ -106,7 +106,12 @@ rm -f "$PREFIX"/lib/libmunimff*.so
   -lc++_shared -lm -lz -llog -landroid \
   -Wl,-Bsymbolic -Wl,--gc-sections -Wl,--exclude-libs,ALL \
   -Wl,--version-script="$WORK/exports.map" \
-  -Wl,-z,max-page-size=16384
+  -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384
+
+# 16 KB page sizes (required for Play from 2027-02-01 on 64-bit ABIs): every
+# LOAD segment is aligned to 16 KB, and common-page-size pads GNU_RELRO out to a
+# 16 KB boundary so the dynamic linker can write-protect all of it on 16 KB
+# devices. build-binaries.yml fails the build if any LOAD is aligned below that.
 
 # Gradle strips native libraries when it packages an app anyway; doing it here
 # keeps the local symbol table (over half the file) out of the download.

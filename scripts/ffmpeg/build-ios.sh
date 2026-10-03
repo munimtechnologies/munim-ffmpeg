@@ -73,8 +73,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libopus.a" ]; then
   echo "  Opus"
-  fetch "https://downloads.xiph.org/releases/opus/opus-1.5.2.tar.gz" opus-1.5.2.tar.gz
-  unpack opus-1.5.2.tar.gz "opus-$SLICE"
+  fetch "https://downloads.xiph.org/releases/opus/opus-1.6.1.tar.gz" opus-1.6.1.tar.gz
+  unpack opus-1.6.1.tar.gz "opus-$SLICE"
   (
     cd "$DEPS/opus-$SLICE"
     ./configure --host="$HOST" --prefix="$PREFIX" --disable-shared --enable-static \
@@ -133,8 +133,8 @@ fi
 # slices the same way its own do.
 if [ ! -f "$PREFIX/lib/libaom.a" ]; then
   echo "  libaom"
-  fetch "https://storage.googleapis.com/aom-releases/libaom-3.15.0.tar.gz" libaom-3.15.0.tar.gz
-  unpack libaom-3.15.0.tar.gz "libaom-$SLICE"
+  fetch "https://storage.googleapis.com/aom-releases/libaom-3.15.1.tar.gz" libaom-3.15.1.tar.gz
+  unpack libaom-3.15.1.tar.gz "libaom-$SLICE"
   (
     cd "$DEPS/libaom-$SLICE"
     cat > toolchain-ios.cmake <<EOF
@@ -220,8 +220,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libfribidi.a" ]; then
   echo "  FriBidi"
-  fetch "https://github.com/fribidi/fribidi/releases/download/v1.0.16/fribidi-1.0.16.tar.xz" fribidi-1.0.16.tar.xz
-  unpack fribidi-1.0.16.tar.xz "fribidi-$SLICE"
+  fetch "https://github.com/fribidi/fribidi/releases/download/v1.0.17/fribidi-1.0.17.tar.xz" fribidi-1.0.17.tar.xz
+  unpack fribidi-1.0.17.tar.xz "fribidi-$SLICE"
   (
     cd "$DEPS/fribidi-$SLICE"
     ./configure --host="$HOST" --prefix="$PREFIX" --disable-shared --enable-static \
@@ -232,8 +232,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libharfbuzz.a" ]; then
   echo "  HarfBuzz"
-  fetch "https://github.com/harfbuzz/harfbuzz/releases/download/14.4.0/harfbuzz-14.4.0.tar.xz" harfbuzz-14.4.0.tar.xz
-  unpack harfbuzz-14.4.0.tar.xz "harfbuzz-$SLICE"
+  fetch "https://github.com/harfbuzz/harfbuzz/releases/download/14.5.1/harfbuzz-14.5.1.tar.xz" harfbuzz-14.5.1.tar.xz
+  unpack harfbuzz-14.5.1.tar.xz "harfbuzz-$SLICE"
   (
     cd "$DEPS/harfbuzz-$SLICE"
     [ "$ARCH" = "arm64" ] && MESON_CPU_FAMILY=aarch64 || MESON_CPU_FAMILY=x86_64

@@ -119,7 +119,7 @@
 - 🖼️ **AVIF and AV1:** libaom encodes AV1 video and AVIF stills, dav1d decodes them
 - 📦 **One native library per platform:** a single `libmunimffmpeg.so` per Android ABI and one static library in the iOS xcframework, so nothing else has to be linked, loaded, or packaged
 - 🎯 **TypeScript:** Complete public callback and result types
-- 🗂️ **16 KB Android pages:** Built with the alignment Google Play requires
+- 🗂️ **16 KB Android pages:** Both native libraries (`libmunimffmpeg.so` and the Nitro bridge) are linked with 16 KB `LOAD` alignment, as Google Play requires for 64-bit apps from 1 February 2027
 
 ## Platform support matrix
 
@@ -235,6 +235,8 @@ await execute(['-y', '-i', inputPath, '-c:v', h264, outputPath])
 Two things to know about hardware encoders: they want NV12 input on Android (`-pix_fmt nv12`) and planar YUV on iOS, and they reject very small frames — 176×144 is the smallest size that works everywhere.
 
 Decoding is uniform: H.264, HEVC, VP8/VP9, AV1 (via dav1d, including AVIF images), MPEG-4, MP3, AAC, Vorbis, Opus, FLAC and the usual containers, on both platforms. Both link TLS, so `https://` inputs work.
+
+On iOS 26.2 and later the module also registers Apple's supplemental AV1 and VP9 decoders with VideoToolbox (`VTRegisterSupplementalVideoDecoderIfAvailable`) before the first run, as FFmpeg already does on macOS, so `-hwaccel videotoolbox` can use them on devices that have them. Without `-hwaccel`, decoding stays in software (dav1d for AV1, FFmpeg's own VP9 decoder) as before.
 
 ## 📦 Installation
 

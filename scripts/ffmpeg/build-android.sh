@@ -57,7 +57,7 @@ export NM="$TOOLCHAIN/bin/llvm-nm"
 # discarded at the final link (--gc-sections) instead of shipping.
 export CFLAGS="-O2 -fPIC -DANDROID -ffunction-sections -fdata-sections $EXTRA_CFLAGS"
 export CXXFLAGS="$CFLAGS"
-export LDFLAGS="-Wl,-z,max-page-size=16384"
+export LDFLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
 
 mkdir -p "$DEPS" "$PREFIX" "$WORKSPACE/build"
 test -d "$SOURCE" || { echo "FFmpeg source missing: $SOURCE (run fetch-source.sh)" >&2; exit 1; }
@@ -86,8 +86,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libopus.a" ]; then
   echo "  Opus"
-  fetch "https://downloads.xiph.org/releases/opus/opus-1.5.2.tar.gz" opus-1.5.2.tar.gz
-  unpack opus-1.5.2.tar.gz "opus-$ABI"
+  fetch "https://downloads.xiph.org/releases/opus/opus-1.6.1.tar.gz" opus-1.6.1.tar.gz
+  unpack opus-1.6.1.tar.gz "opus-$ABI"
   (
     cd "$DEPS/opus-$ABI"
     ./configure --host="$HOST" --prefix="$PREFIX" --disable-shared --enable-static \
@@ -148,8 +148,8 @@ fi
 # with dav1d, which is faster, so libaom's own decoder is compiled out.
 if [ ! -f "$PREFIX/lib/libaom.a" ]; then
   echo "  libaom"
-  fetch "https://storage.googleapis.com/aom-releases/libaom-3.15.0.tar.gz" libaom-3.15.0.tar.gz
-  unpack libaom-3.15.0.tar.gz "libaom-$ABI"
+  fetch "https://storage.googleapis.com/aom-releases/libaom-3.15.1.tar.gz" libaom-3.15.1.tar.gz
+  unpack libaom-3.15.1.tar.gz "libaom-$ABI"
   (
     cd "$DEPS/libaom-$ABI"
     # libaom's own Android toolchain wraps the NDK's and picks the assembler.
@@ -226,8 +226,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libfribidi.a" ]; then
   echo "  FriBidi"
-  fetch "https://github.com/fribidi/fribidi/releases/download/v1.0.16/fribidi-1.0.16.tar.xz" fribidi-1.0.16.tar.xz
-  unpack fribidi-1.0.16.tar.xz "fribidi-$ABI"
+  fetch "https://github.com/fribidi/fribidi/releases/download/v1.0.17/fribidi-1.0.17.tar.xz" fribidi-1.0.17.tar.xz
+  unpack fribidi-1.0.17.tar.xz "fribidi-$ABI"
   (
     cd "$DEPS/fribidi-$ABI"
     ./configure --host="$HOST" --prefix="$PREFIX" --disable-shared --enable-static \
@@ -238,8 +238,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libharfbuzz.a" ]; then
   echo "  HarfBuzz"
-  fetch "https://github.com/harfbuzz/harfbuzz/releases/download/14.4.0/harfbuzz-14.4.0.tar.xz" harfbuzz-14.4.0.tar.xz
-  unpack harfbuzz-14.4.0.tar.xz "harfbuzz-$ABI"
+  fetch "https://github.com/harfbuzz/harfbuzz/releases/download/14.5.1/harfbuzz-14.5.1.tar.xz" harfbuzz-14.5.1.tar.xz
+  unpack harfbuzz-14.5.1.tar.xz "harfbuzz-$ABI"
   (
     cd "$DEPS/harfbuzz-$ABI"
     case "$ABI" in
@@ -275,8 +275,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libexpat.a" ]; then
   echo "  expat"
-  fetch "https://github.com/libexpat/libexpat/releases/download/R_2_8_4/expat-2.8.4.tar.xz" expat-2.8.4.tar.xz
-  unpack expat-2.8.4.tar.xz "expat-$ABI"
+  fetch "https://github.com/libexpat/libexpat/releases/download/R_2_8_5/expat-2.8.5.tar.xz" expat-2.8.5.tar.xz
+  unpack expat-2.8.5.tar.xz "expat-$ABI"
   (
     cd "$DEPS/expat-$ABI"
     cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
