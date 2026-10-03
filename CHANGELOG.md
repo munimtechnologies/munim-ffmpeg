@@ -1,3 +1,9 @@
+## [0.8.1](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.8.0...v0.8.1) (2026-10-03)
+
+### 🐛 Bug Fixes
+
+* patch native dependencies and align Android libraries to 16 KB pages ([#13](https://github.com/munimtechnologies/munim-ffmpeg/issues/13)) ([f374d4d](https://github.com/munimtechnologies/munim-ffmpeg/commit/f374d4d78fa7f8f1ce51cfe66e0af9b14d0b1bee))
+
 ## [0.8.0](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.7.1...v0.8.0) (2026-09-19)
 
 ### ✨ Features
