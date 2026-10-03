@@ -226,7 +226,9 @@ if [ ! -f "$PREFIX/lib/libfribidi.a" ]; then
     cd "$DEPS/fribidi-$SLICE"
     ./configure --host="$HOST" --prefix="$PREFIX" --disable-shared --enable-static \
       --disable-debug
-    make -j"$JOBS" && make install
+    # Library only: since 1.0.17 bin/ generates its man page by running the
+    # freshly built (cross-compiled) fribidi binary, which cannot run here.
+    make -j"$JOBS" SUBDIRS="gen.tab lib" && make install SUBDIRS="gen.tab lib"
   ) > "$WORKSPACE/build/fribidi-$SLICE.log" 2>&1
 fi
 
