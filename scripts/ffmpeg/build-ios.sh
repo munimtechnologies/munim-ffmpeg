@@ -52,7 +52,13 @@ esac
 mkdir -p "$DEPS" "$PREFIX" "$WORKSPACE/build"
 test -d "$SOURCE" || { echo "FFmpeg source missing: $SOURCE (run fetch-source.sh)" >&2; exit 1; }
 
-fetch() { [ -f "$DEPS/$2" ] || curl -sL -o "$DEPS/$2" "$1"; }
+# -f fails on HTTP errors instead of saving the error page as the archive; a
+# failed or partial download is removed so a rerun fetches it again.
+fetch() {
+  [ -f "$DEPS/$2" ] && return 0
+  curl -fsSL --retry 3 -o "$DEPS/$2.part" "$1" || { rm -f "$DEPS/$2.part"; echo "download failed: $1" >&2; return 1; }
+  mv "$DEPS/$2.part" "$DEPS/$2"
+}
 unpack() { rm -rf "$DEPS/$2"; mkdir -p "$DEPS/$2"; tar xf "$DEPS/$1" -C "$DEPS/$2" --strip-components=1; }
 
 echo "==> external libraries for $SLICE"
@@ -99,8 +105,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libdav1d.a" ]; then
   echo "  dav1d"
-  fetch "https://code.videolan.org/videolan/dav1d/-/archive/1.5.4/dav1d-1.5.4.tar.gz" dav1d-1.5.4.tar.gz
-  unpack dav1d-1.5.4.tar.gz "dav1d-$SLICE"
+  fetch "https://downloads.videolan.org/pub/videolan/dav1d/1.5.4/dav1d-1.5.4.tar.xz" dav1d-1.5.4.tar.xz
+  unpack dav1d-1.5.4.tar.xz "dav1d-$SLICE"
   (
     cd "$DEPS/dav1d-$SLICE"
     [ "$ARCH" = "arm64" ] && MESON_CPU_FAMILY=aarch64 || MESON_CPU_FAMILY=x86_64
