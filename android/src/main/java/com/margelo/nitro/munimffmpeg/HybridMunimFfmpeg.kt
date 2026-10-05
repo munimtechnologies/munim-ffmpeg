@@ -179,9 +179,14 @@ class HybridMunimFfmpeg : HybridMunimFfmpegSpec() {
   }
 
   override fun cancel(sessionId: Double?) {
-    if (sessionId != null) validate(sessionId)
-    // Only one execution runs at a time, so a targeted cancel and cancelAll()
-    // are the same operation.
+    if (sessionId != null) {
+      validate(sessionId)
+      // A finished or unknown session has nothing left to cancel. Cancelling
+      // the core anyway would stop whatever unrelated session runs now.
+      if (registry.activeKind(sessionId) == null) return
+    }
+    // The core runs one execution at a time and cannot single out a session,
+    // so this stops the running one and everything queued behind it.
     FFmpegNative.nativeCancel()
   }
 
