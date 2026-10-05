@@ -315,9 +315,12 @@ final class HybridMunimFfmpeg: HybridMunimFfmpegSpec {
   func cancel(sessionId: Double?) throws {
     if let sessionId {
       try Self.validate(sessionId)
+      // A finished or unknown session has nothing left to cancel. Cancelling
+      // the core anyway would stop whatever unrelated session runs now.
+      guard registry.activeKind(sessionId) != nil else { return }
     }
-    // One execution runs at a time, so cancelling a specific session and
-    // cancelling everything are the same operation.
+    // The core runs one execution at a time and cannot single out a session,
+    // so this stops the running one and everything queued behind it.
     munim_ffmpeg_cancel()
   }
 

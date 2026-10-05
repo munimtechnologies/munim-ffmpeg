@@ -98,7 +98,7 @@
 - ⚡ **Asynchronous sessions:** Keep the React Native thread responsive during native work
 - 📝 **Live logs:** Receive FFmpeg output as it is produced
 - 📈 **Encoding statistics:** Track time, size, bitrate, speed, frames, FPS, and quality
-- 🎯 **Targeted cancellation:** Capture a native session ID immediately and cancel only that command
+- 🎯 **Targeted cancellation:** Capture a native session ID immediately and cancel that command while it runs
 - 🛑 **Global cancellation:** Stop all active sessions during workflow or screen cleanup
 - ⏸️ **Pause and resume:** Hold a running or queued session with no CPU use and continue exactly where it stopped
 
@@ -461,7 +461,7 @@ function getMediaDuration(information: MediaInformation): number | undefined
 
 ### `cancel(sessionId?)`
 
-Cancels the given native FFmpeg execution session. Calling `cancel()` without an ID cancels all active FFmpeg sessions. FFprobe cancellation is not exposed by the bundled native dependency.
+Cancels the given native FFmpeg execution session. FFmpeg runs one session at a time and the native core cannot single one out, so cancelling an active session also cancels any sessions queued behind it. An ID whose session has already finished, or that was never issued, is ignored. Calling `cancel()` without an ID cancels all active FFmpeg sessions. FFprobe cancellation is not exposed by the bundled native dependency.
 
 ```typescript
 function cancel(sessionId?: number): void
@@ -614,7 +614,7 @@ type FFmpegSessionResult = {
 }
 ```
 
-`state` is one of `created`, `running`, `failed`, or `completed`, and reports the same values on both platforms.
+`state` is always `completed` once the promise settles, on both platforms; use `success`, `cancelled`, and `returnCode` to tell how the session ended, or `getSessionState()` for `completed`, `failed`, or `cancelled`.
 
 Always check `success` or `cancelled`; Promise resolution means the native session completed, not necessarily that FFmpeg returned a success code.
 
