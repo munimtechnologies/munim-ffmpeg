@@ -88,7 +88,7 @@ function writeFile(
 ) {
   const file = new File(directory, name)
   file.create({ overwrite: true })
-  file.write(contents)
+  file.writeSync(contents)
   return file
 }
 

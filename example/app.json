@@ -22,15 +22,7 @@
       "package": "com.sheehanmunim.munimffmpegexample"
     },
     "plugins": [
-      "munim-ffmpeg",
-      [
-        "expo-build-properties",
-        {
-          "ios": {
-            "enableSceneSupport": true
-          }
-        }
-      ]
+      "munim-ffmpeg"
     ],
     "web": {
       "favicon": "./assets/favicon.png"

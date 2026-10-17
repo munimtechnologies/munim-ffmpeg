@@ -133,11 +133,11 @@ export async function runSuite(
 
   const source = new File(directory, 'source.wav')
   source.create({ overwrite: true })
-  source.write(wavFixture(SOURCE_SECONDS))
+  source.writeSync(wavFixture(SOURCE_SECONDS))
 
   const raw = new File(directory, 'source.rgb')
   raw.create({ overwrite: true })
-  raw.write(rawVideoFrames())
+  raw.writeSync(rawVideoFrames())
 
   const video = new File(directory, 'video-h264.mp4')
   const scaled = new File(directory, 'scaled.mp4')
@@ -813,7 +813,7 @@ export async function runSuite(
   // was actually rasterised, not merely that the filter graph ran.
   const black = new File(directory, 'black.rgb')
   black.create({ overwrite: true })
-  black.write(new Uint8Array(RAW_WIDTH * RAW_HEIGHT * 3 * RAW_FRAMES))
+  black.writeSync(new Uint8Array(RAW_WIDTH * RAW_HEIGHT * 3 * RAW_FRAMES))
 
   async function burnAndMeasure(filterGraph: string): Promise<number> {
     const logs: string[] = []
@@ -846,7 +846,7 @@ export async function runSuite(
 
   const ass = new File(directory, 'styled.ass')
   ass.create({ overwrite: true })
-  ass.write(
+  ass.writeSync(
     [
       '[Script Info]',
       'ScriptType: v4.00+',
@@ -878,7 +878,7 @@ export async function runSuite(
 
   const srt = new File(directory, 'plain.srt')
   srt.create({ overwrite: true })
-  srt.write('1\n00:00:00,000 --> 00:00:09,000\nSUBTITLE TEST\n')
+  srt.writeSync('1\n00:00:00,000 --> 00:00:09,000\nSUBTITLE TEST\n')
 
   record(
     await run('Burns SRT subtitles with force_style', async () => {
@@ -1148,7 +1148,7 @@ export async function runSuite(
       const listPath = new File(directory, 'concat.txt')
       const plain = normalizePath(video.uri)
       listPath.create({ overwrite: true })
-      listPath.write(`file '${plain}'\nfile '${plain}'\n`)
+      listPath.writeSync(`file '${plain}'\nfile '${plain}'\n`)
 
       const joined = new File(directory, 'joined.mp4')
       const result = await execute([

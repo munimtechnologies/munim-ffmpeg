@@ -40,7 +40,7 @@ export default function App() {
       // connected machine without touching the screen.
       const resultFile = new File(Paths.document, 'munim-ffmpeg-suite.json')
       resultFile.create({ overwrite: true })
-      resultFile.write(JSON.stringify(result, null, 2))
+      resultFile.writeSync(JSON.stringify(result, null, 2))
       console.log('MUNIM_FFMPEG_SUITE_RESULT', JSON.stringify(result))
     } catch (thrown) {
       const message = thrown instanceof Error ? thrown.message : String(thrown)
@@ -63,7 +63,7 @@ export default function App() {
       <StatusBar style="light" />
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.eyebrow}>
-          <Text style={styles.eyebrowText}>EXPO SDK 57 · NITRO MODULE</Text>
+          <Text style={styles.eyebrowText}>EXPO SDK 58 · NITRO MODULE</Text>
         </View>
         <Text style={styles.title}>Munim FFmpeg</Text>
         <Text style={styles.subtitle}>
