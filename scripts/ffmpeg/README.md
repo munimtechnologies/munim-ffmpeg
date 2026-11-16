@@ -130,6 +130,11 @@ do not have to be rediscovered.
 - **libaom on iOS**: ships toolchains for the device and the x86_64 simulator
   only, so `build-ios.sh` writes its own for all three slices; SVE is disabled
   because Apple's clang rejects the flags.
+- **Android JNI strings**: `NewStringUTF`/`GetStringUTFChars` speak JNI's
+  _modified_ UTF-8, not UTF-8, so `android_bridge.c` converts both ways
+  (`src/modified_utf8.h`). Without it an emoji in a path names a nonexistent
+  file, and a log line with non-UTF-8 metadata aborts a debug build under
+  CheckJNI. `test/modified_utf8_test.c` covers the conversions and runs in CI.
 - **openh264** is C++, so FFmpeg needs `--extra-libs=-lc++_shared` on Android
   and `-lc++` on iOS, plus `--pkg-config-flags=--static` to pick up the
   dependency from its `.pc` file.

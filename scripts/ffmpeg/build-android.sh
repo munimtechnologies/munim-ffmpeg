@@ -154,8 +154,8 @@ fi
 # with dav1d, which is faster, so libaom's own decoder is compiled out.
 if [ ! -f "$PREFIX/lib/libaom.a" ]; then
   echo "  libaom"
-  fetch "https://storage.googleapis.com/aom-releases/libaom-3.15.1.tar.gz" libaom-3.15.1.tar.gz
-  unpack libaom-3.15.1.tar.gz "libaom-$ABI"
+  fetch "https://storage.googleapis.com/aom-releases/libaom-3.15.3.tar.gz" libaom-3.15.3.tar.gz
+  unpack libaom-3.15.3.tar.gz "libaom-$ABI"
   (
     cd "$DEPS/libaom-$ABI"
     # libaom's own Android toolchain wraps the NDK's and picks the assembler.
@@ -171,8 +171,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libopenh264.a" ]; then
   echo "  openh264"
-  fetch "https://github.com/cisco/openh264/archive/refs/tags/v2.6.0.tar.gz" openh264-2.6.0.tar.gz
-  unpack openh264-2.6.0.tar.gz "openh264-$ABI"
+  fetch "https://github.com/cisco/openh264/archive/refs/tags/v2.7.0.tar.gz" openh264-2.7.0.tar.gz
+  unpack openh264-2.7.0.tar.gz "openh264-$ABI"
   (
     cd "$DEPS/openh264-$ABI"
     case "$ABI" in
@@ -219,8 +219,8 @@ fi
 # discover the system fonts under /system/fonts.
 if [ ! -f "$PREFIX/lib/libfreetype.a" ]; then
   echo "  FreeType"
-  fetch "https://download.savannah.gnu.org/releases/freetype/freetype-2.14.3.tar.xz" freetype-2.14.3.tar.xz
-  unpack freetype-2.14.3.tar.xz "freetype-$ABI"
+  fetch "https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz" freetype-2.15.0.tar.xz
+  unpack freetype-2.15.0.tar.xz "freetype-$ABI"
   (
     cd "$DEPS/freetype-$ABI"
     PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig" \
@@ -232,8 +232,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libfribidi.a" ]; then
   echo "  FriBidi"
-  fetch "https://github.com/fribidi/fribidi/releases/download/v1.0.17/fribidi-1.0.17.tar.xz" fribidi-1.0.17.tar.xz
-  unpack fribidi-1.0.17.tar.xz "fribidi-$ABI"
+  fetch "https://github.com/fribidi/fribidi/releases/download/v1.0.18/fribidi-1.0.18.tar.xz" fribidi-1.0.18.tar.xz
+  unpack fribidi-1.0.18.tar.xz "fribidi-$ABI"
   (
     cd "$DEPS/fribidi-$ABI"
     ./configure --host="$HOST" --prefix="$PREFIX" --disable-shared --enable-static \
@@ -246,8 +246,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libharfbuzz.a" ]; then
   echo "  HarfBuzz"
-  fetch "https://github.com/harfbuzz/harfbuzz/releases/download/14.5.1/harfbuzz-14.5.1.tar.xz" harfbuzz-14.5.1.tar.xz
-  unpack harfbuzz-14.5.1.tar.xz "harfbuzz-$ABI"
+  fetch "https://github.com/harfbuzz/harfbuzz/releases/download/15.1.0/harfbuzz-15.1.0.tar.xz" harfbuzz-15.1.0.tar.xz
+  unpack harfbuzz-15.1.0.tar.xz "harfbuzz-$ABI"
   (
     cd "$DEPS/harfbuzz-$ABI"
     case "$ABI" in
@@ -283,8 +283,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libexpat.a" ]; then
   echo "  expat"
-  fetch "https://github.com/libexpat/libexpat/releases/download/R_2_8_5/expat-2.8.5.tar.xz" expat-2.8.5.tar.xz
-  unpack expat-2.8.5.tar.xz "expat-$ABI"
+  fetch "https://github.com/libexpat/libexpat/releases/download/R_2_10_0/expat-2.10.0.tar.xz" expat-2.10.0.tar.xz
+  unpack expat-2.10.0.tar.xz "expat-$ABI"
   (
     cd "$DEPS/expat-$ABI"
     cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \

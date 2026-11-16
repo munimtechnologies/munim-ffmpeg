@@ -14,7 +14,8 @@ export type FFmpegSessionResult = {
 /**
  * Where a session is in its life. `queued` sessions wait for the one running
  * ahead of them (FFmpeg runs one execution at a time); `unknown` means the id
- * was never issued or its record has been dropped.
+ * was never issued or its record has been dropped. A queued session that is
+ * cancelled reports `cancelled` without ever running.
  */
 export type FFmpegSessionState =
   | 'queued'
@@ -75,4 +76,11 @@ export interface MunimFfmpeg extends HybridObject<{
   resume(sessionId: number): boolean
 
   getSessionState(sessionId: number): FFmpegSessionState
+
+  /**
+   * How often log callbacks are delivered, in milliseconds; messages logged in
+   * between are joined into one callback. 0 delivers every message on its own.
+   * Applies to sessions started afterwards.
+   */
+  setLogBatchInterval(intervalMs: number): void
 }

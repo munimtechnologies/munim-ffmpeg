@@ -1,12 +1,18 @@
 import { Directory, File, Paths } from 'expo-file-system'
+import { Platform } from 'react-native'
 import {
   cancel,
   cancelAll,
+  compressVideo,
+  createThumbnail,
   execute,
+  executeCommand,
+  formatArguments,
   getFFmpegVersion,
   getMediaDuration,
   getMediaInformation,
   getSessionState,
+  getVideoStream,
   listDecoders,
   listDemuxers,
   listEncoders,
@@ -18,6 +24,7 @@ import {
   pickEncoder,
   probe,
   resume,
+  setLogBatchInterval,
 } from 'munim-ffmpeg'
 
 import { RAW_VIDEO, rawVideoFrames, wavFixture } from './fixture'
@@ -418,12 +425,20 @@ export async function runSuite(
         const sleep = (ms: number) =>
           new Promise((resolve) => setTimeout(resolve, ms))
 
+        // Input is read at 4x real time. Unthrottled, a fast hardware encoder
+        // (VideoToolbox on an M3) can already hold the rest of the 20 s in
+        // its pipeline when the pause lands, finish while "paused", and make
+        // resume() correctly report that nothing was paused any more. At 4x
+        // the pause lands about 3 s in, far from the end, on any device; it
+        // also exercises the -readrate clock shift after a resume.
         const execution = execute(
           [
             '-y',
             '-hide_banner',
             '-stream_loop',
             '-1',
+            '-readrate',
+            '4',
             ...rawVideoInput(raw.uri),
             '-t',
             String(seconds),
@@ -457,12 +472,21 @@ export async function runSuite(
           lastTimeMs === pausedAt,
           `progress moved while paused: ${pausedAt} -> ${lastTimeMs} ms`
         )
-        assert(pausedAt < seconds * 1000, 'finished before it could be paused')
-
         assert(
-          resume(sessionId),
-          'resume() returned false for a paused session'
+          pausedAt < (seconds - 5) * 1000,
+          `paused too close to the end to prove anything: ${pausedAt} ms of ${seconds * 1000}`
         )
+
+        if (!resume(sessionId)) {
+          // Report how the session actually ended instead of a bare false.
+          const state = getSessionState(sessionId)
+          const ended = state === 'paused' ? undefined : await execution
+          throw new Error(
+            `resume() returned false; state ${state}, return code ${ended?.returnCode}, ` +
+              `paused at ${pausedAt} ms, last progress ${lastTimeMs} ms: ` +
+              `${ended?.output.trim().split('\n').slice(-2).join(' | ') ?? ''}`
+          )
+        }
         assert(
           getSessionState(sessionId) === 'running',
           `state after resume: ${getSessionState(sessionId)}`
@@ -1316,6 +1340,285 @@ export async function runSuite(
       return `returnCode ${result.returnCode}`
     })
   )
+
+  const sleep = (ms: number) =>
+    new Promise((resolve) => setTimeout(resolve, ms))
+
+  // A command that runs until it is cancelled.
+  const endlessRun = (name: string, onSession: (id: number) => void) =>
+    execute(
+      [
+        '-y',
+        '-hide_banner',
+        '-stream_loop',
+        '-1',
+        ...rawVideoInput(raw.uri),
+        '-t',
+        '600',
+        '-vf',
+        'scale=1280:720',
+        ...videoEncoderArguments(h264 ?? 'mpeg4'),
+        new File(directory, name).uri,
+      ],
+      undefined,
+      undefined,
+      onSession
+    )
+
+  const shortAudioRun = (name: string, onSession?: (id: number) => void) =>
+    execute(
+      [
+        '-y',
+        '-hide_banner',
+        '-i',
+        source.uri,
+        '-c:a',
+        'aac',
+        new File(directory, name).uri,
+      ],
+      undefined,
+      undefined,
+      onSession
+    )
+
+  record(
+    await run(
+      'Cancels a queued session without touching the running one',
+      async () => {
+        let first: number | undefined
+        let second: number | undefined
+        const running = endlessRun('queue-running.mp4', (id) => {
+          first = id
+        })
+        const queued = shortAudioRun('queue-dropped.m4a', (id) => {
+          second = id
+        })
+        await sleep(700)
+        assert(
+          first !== undefined && second !== undefined,
+          'missing session IDs'
+        )
+        assert(
+          getSessionState(second) === 'queued',
+          `second session state: ${getSessionState(second)}`
+        )
+
+        cancel(second)
+        const dropped = await queued
+        assert(dropped.cancelled, 'the queued session was not cancelled')
+        assert(
+          getSessionState(second) === 'cancelled',
+          `queued session final state: ${getSessionState(second)}`
+        )
+        assert(
+          getSessionState(first) === 'running',
+          `running session after cancelling the queued one: ${getSessionState(first)}`
+        )
+
+        cancel(first)
+        const stopped = await running
+        assert(stopped.cancelled, 'the running session was not cancelled')
+        return `queued session ${second} dropped while ${first} kept running`
+      }
+    )
+  )
+
+  record(
+    await run(
+      'Cancelling the running session starts the next one',
+      async () => {
+        let first: number | undefined
+        const running = endlessRun('next-running.mp4', (id) => {
+          first = id
+        })
+        const next = shortAudioRun('next-queued.m4a')
+        await sleep(700)
+        assert(first !== undefined, 'missing session ID')
+
+        cancel(first)
+        const [stopped, finished] = await Promise.all([running, next])
+        assert(stopped.cancelled, 'the running session was not cancelled')
+        assert(
+          finished.success,
+          `the queued session did not run: return code ${finished.returnCode}`
+        )
+        return `session ${first} cancelled, the queued session then completed`
+      }
+    )
+  )
+
+  record(
+    await run('Runs a command written as one string', async () => {
+      const output = new File(directory, 'string command é.m4a')
+      const command = `-y -hide_banner -i ${formatArguments([
+        normalizePath(source.uri),
+      ])} -c:a aac ${formatArguments([normalizePath(output.uri)])}`
+      const result = await executeCommand(command)
+      assert(result.success, result.failStackTrace ?? result.output)
+      assert((output.size ?? 0) > 0, 'no output written')
+      return `${output.size} bytes from: ${command.slice(0, 60)}…`
+    })
+  )
+
+  record(
+    await run('Batches log callbacks (JS thread load)', async () => {
+      // Debug logging produces hundreds of lines a second, the worst case for
+      // the JS thread. The same run is measured delivering every message on
+      // its own, then batched every 100 ms (the default).
+      const measure = async (intervalMs: number) => {
+        setLogBatchInterval(intervalMs)
+        let calls = 0
+        let characters = 0
+        let maxLag = 0
+        let last = Date.now()
+        const ticker = setInterval(() => {
+          const now = Date.now()
+          maxLag = Math.max(maxLag, now - last - 20)
+          last = now
+        }, 20)
+        const startedAt = Date.now()
+        try {
+          const result = await execute(
+            [
+              '-y',
+              '-hide_banner',
+              '-loglevel',
+              'debug',
+              '-stream_loop',
+              '9',
+              ...rawVideoInput(raw.uri),
+              '-c:v',
+              'mpeg4',
+              new File(directory, `log-batching-${intervalMs}.mp4`).uri,
+            ],
+            (message) => {
+              calls += 1
+              characters += message.length
+            }
+          )
+          assert(result.success, result.failStackTrace ?? result.output)
+        } finally {
+          clearInterval(ticker)
+        }
+        return { calls, characters, maxLag, ms: Date.now() - startedAt }
+      }
+
+      try {
+        const unbatched = await measure(0)
+        const batched = await measure(100)
+        assert(
+          batched.calls < unbatched.calls,
+          `batching did not reduce callbacks: ${unbatched.calls} -> ${batched.calls}`
+        )
+        assert(
+          Math.abs(batched.characters - unbatched.characters) <
+            unbatched.characters * 0.1,
+          `log text differs: ${unbatched.characters} vs ${batched.characters} characters`
+        )
+        return (
+          `${unbatched.calls} -> ${batched.calls} callbacks for ~${batched.characters} characters; ` +
+          `run ${unbatched.ms} -> ${batched.ms} ms; ` +
+          `worst JS timer lag ${unbatched.maxLag} -> ${batched.maxLag} ms`
+        )
+      } finally {
+        setLogBatchInterval(100)
+      }
+    })
+  )
+
+  record(
+    await run('compressVideo uses the hardware encoder', async () => {
+      const compressed = new File(directory, 'compressed.mp4')
+      let lastFraction: number | undefined
+      const result = await compressVideo(scaled.uri, compressed.uri, {
+        maxWidth: 176,
+        maxHeight: 176,
+        onProgress: ({ fraction }) => {
+          if (fraction !== undefined) lastFraction = fraction
+        },
+      })
+      const stream = getVideoStream(await getMediaInformation(compressed.uri))
+      assert(stream?.codec_name === 'h264', `got ${stream?.codec_name}`)
+      const attempts = result.attempts
+        .map((attempt) => `${attempt.encoder}=${attempt.returnCode}`)
+        .join(', ')
+      return (
+        `${result.encoder} (${result.hardware ? 'hardware' : 'software fallback'}), ` +
+        `${stream.width}x${stream.height} at ${result.videoBitrateKbits} kbit/s, ` +
+        `attempts ${attempts}, progress reached ${lastFraction?.toFixed(2) ?? 'n/a'}`
+      )
+    })
+  )
+
+  record(
+    await run('createThumbnail writes a scaled JPEG', async () => {
+      const thumbnail = new File(directory, 'thumbnail.jpg')
+      const result = await createThumbnail(video.uri, thumbnail.uri, {
+        timeMs: 1000,
+        maxWidth: 80,
+      })
+      assert(
+        result.width === 80 && result.height === 60,
+        `reported ${result.width}x${result.height}`
+      )
+      const stream = getVideoStream(await getMediaInformation(thumbnail.uri))
+      assert(
+        stream?.codec_name === 'mjpeg' && stream.width === 80,
+        `wrote ${stream?.codec_name} ${stream?.width}x${stream?.height}`
+      )
+      return `${thumbnail.size} bytes, ${result.width}x${result.height} at ${result.timeMs} ms`
+    })
+  )
+
+  if (Platform.OS === 'android') {
+    record(
+      await run('Reads and writes content:// URIs (Android)', async () => {
+        // expo-file-system serves its files through a FileProvider, which
+        // gives a real content:// URI without any picker interaction.
+        const input = video.contentUri
+        assert(input.startsWith('content://'), `not a content URI: ${input}`)
+
+        const information = await getMediaInformation(input)
+        assert(
+          getVideoStream(information),
+          'probing the content URI found no video'
+        )
+
+        const fromContent = new File(directory, 'from-content.mp4')
+        const read = await execute([
+          '-y',
+          '-hide_banner',
+          '-i',
+          input,
+          '-c',
+          'copy',
+          fromContent.uri,
+        ])
+        assert(read.success, read.failStackTrace ?? read.output)
+
+        const target = new File(directory, 'to-content.mp4')
+        target.create({ overwrite: true })
+        const written = await execute([
+          '-y',
+          '-hide_banner',
+          '-i',
+          video.uri,
+          '-c',
+          'copy',
+          '-movflags',
+          '+faststart',
+          target.contentUri,
+        ])
+        assert(written.success, written.failStackTrace ?? written.output)
+        const copied = getVideoStream(await getMediaInformation(target.uri))
+        assert(
+          copied?.codec_name === 'h264',
+          'the content URI output has no video'
+        )
+        return `read ${fromContent.size} bytes from and wrote ${target.size} bytes to content:// URIs`
+      })
+    )
+  }
 
   directory.delete()
 

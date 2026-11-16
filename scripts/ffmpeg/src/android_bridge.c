@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "munim_ffmpeg_core.h"
+#include "modified_utf8.h"
 
 static JavaVM *vm;
 static jclass session_class;
@@ -33,7 +34,11 @@ static void forward_log(void *context, const char *message)
     JNIEnv *env = attach(&attached);
     if (!env) return;
 
-    jstring text = (*env)->NewStringUTF(env, message);
+    /* NewStringUTF wants modified UTF-8; FFmpeg logs standard UTF-8 and, from
+     * file metadata, sometimes bytes that are not UTF-8 at all. */
+    char *modified = munim_utf8_to_modified(message);
+    jstring text = modified ? (*env)->NewStringUTF(env, modified) : NULL;
+    free(modified);
     if (text) {
         (*env)->CallVoidMethod(env, (jobject)context, on_log, text);
         (*env)->DeleteLocalRef(env, text);
@@ -88,8 +93,10 @@ static const char **to_argv(JNIEnv *env, jobjectArray args, jsize count)
     for (jsize i = 0; i < count; i++) {
         jstring item = (jstring)(*env)->GetObjectArrayElement(env, args, i);
         const char *chars = (*env)->GetStringUTFChars(env, item, NULL);
-        argv[i] = strdup(chars);
-        (*env)->ReleaseStringUTFChars(env, item, chars);
+        /* Modified UTF-8 to the standard UTF-8 FFmpeg expects, or a path
+         * with an emoji in it names a file that does not exist. */
+        argv[i] = chars ? munim_utf8_from_modified(chars) : strdup("");
+        if (chars) (*env)->ReleaseStringUTFChars(env, item, chars);
         (*env)->DeleteLocalRef(env, item);
     }
     return argv;

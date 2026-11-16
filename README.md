@@ -55,7 +55,7 @@
 
 ## Introduction
 
-**munim-ffmpeg** provides fast, typed FFmpeg and FFprobe access for Expo and React Native. It executes argument arrays directly through native FFmpeg libraries, streams logs and encoding statistics to JavaScript, returns structured session results, inspects media with FFprobe, and cancels one running session or every active session.
+**munim-ffmpeg** provides fast, typed FFmpeg and FFprobe access for Expo and React Native. It executes argument arrays (or FFmpegKit-style command strings) directly through native FFmpeg libraries, streams batched logs and encoding statistics to JavaScript, returns structured session results, inspects media with FFprobe, compresses video with the platform's hardware encoder, and cancels, pauses or resumes individual sessions.
 
 **Built with React Native Nitro Modules.** One TypeScript specification generates the C++, Swift, and Kotlin bindings used by the package.
 
@@ -98,12 +98,18 @@
 - ⚡ **Asynchronous sessions:** Keep the React Native thread responsive during native work
 - 📝 **Live logs:** Receive FFmpeg output as it is produced
 - 📈 **Encoding statistics:** Track time, size, bitrate, speed, frames, FPS, and quality
-- 🎯 **Targeted cancellation:** Capture a native session ID immediately and cancel that command while it runs
+- ⌨️ **Command strings too:** `executeCommand('-i "in.mov" out.mp4')` splits a command the way a shell would, for code migrating from FFmpegKit
+- 🪶 **Batched logs:** Log lines are collected natively and delivered at most every 100 ms, so `-loglevel debug` cannot flood the JS thread
+- 🎯 **Targeted cancellation:** Cancel exactly one session — a queued one is dropped before it starts, a running one is stopped, and every other session carries on
 - 🛑 **Global cancellation:** Stop all active sessions during workflow or screen cleanup
 - ⏸️ **Pause and resume:** Hold a running or queued session with no CPU use and continue exactly where it stopped
+- 🧵 **Off the main thread:** Sessions run on one dedicated native thread; queued sessions wait in a list and hold no thread at all
 
 ### FFprobe and media inspection
 
+- 🗜️ **`compressVideo()`:** Hardware encoding by default (VideoToolbox decode and encode on iOS, MediaCodec on Android) with automatic software fallback, aspect-correct downscaling, rotation handling, and progress as a fraction
+- 🖼️ **`createThumbnail()`:** Grab a frame as a scaled JPEG or PNG, like `expo-video-thumbnails`, for any format FFmpeg reads
+- 📂 **Android `content://` URIs:** Inputs from the photo picker, Storage Access Framework or MediaStore are read through their file descriptor without copying; outputs are written back after the run
 - 🔎 **FFprobe execution:** Run custom probing commands with the same typed session result
 - 🧾 **Parsed media information:** Inspect format, streams, chapters, codecs, duration, and metadata as JSON
 - ✅ **Structured completion:** Read return code, state, duration, output, cancellation state, and failure details
@@ -123,25 +129,29 @@
 
 ## Platform support matrix
 
-| Capability                   | iOS          | Android    | Notes                                                                                                                                                                   |
-| ---------------------------- | ------------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| FFmpeg argument execution    | ✅           | ✅         | Commands run asynchronously through the native compatibility library.                                                                                                   |
-| FFprobe argument execution   | ✅           | ✅         | Custom FFprobe arguments return `FFmpegSessionResult`.                                                                                                                  |
-| Parsed media information     | ✅           | ✅         | `getMediaInformation()` returns typed, parsed FFprobe JSON.                                                                                                                    |
-| Log callback                 | ✅           | ✅         | Logs are delivered while a session is active.                                                                                                                           |
-| Encoding-statistics callback | ✅           | ✅         | Available for FFmpeg execution.                                                                                                                                         |
-| Immediate session ID         | ✅           | ✅         | `onSessionCreated` fires after the native session is created.                                                                                                           |
-| Cancel one FFmpeg session    | ✅           | ✅         | Pass the positive safe-integer ID received by `execute`'s `onSessionCreated`. The native dependency does not expose FFprobe cancellation.                               |
-| Cancel all FFmpeg sessions   | ✅           | ✅         | Use `cancelAll()` or call `cancel()` without an ID.                                                                                                                     |
-| Pause and resume a session   | ✅           | ✅         | `pause()` / `resume()` with an `execute` session ID, running or queued. FFprobe sessions cannot be paused.                                                              |
-| Session state                | ✅           | ✅         | `getSessionState()` reports `queued`, `running`, `paused`, `completed`, `failed`, or `cancelled`.                                                                       |
-| Expo Go                      | ❌           | ❌         | A native development build is required.                                                                                                                                 |
-| Capability discovery         | ✅           | ✅         | `listEncoders()`, `listDecoders()`, `listMuxers()`, `listDemuxers()`, `listFilters()`, `listProtocols()`, and `pickEncoder()` report what the bundled build supports.   |
-| Subtitle burn-in             | ✅           | ✅         | libass with system fonts: Core Text on iOS, fontconfig over `/system/fonts` on Android.                                                                                 |
-| H.264 encoding               | VideoToolbox | MediaCodec | Hardware on both, `libopenh264` as the software fallback; use `pickEncoder(['h264_videotoolbox', 'h264_mediacodec', 'libopenh264'])` instead of hard-coding an encoder. |
-| Remote HTTP(S) inputs        | ✅           | ✅         | iOS links SecureTransport, Android links mbedTLS. Remote server behaviour still varies; prefer local files for predictable app workflows.                               |
-| Soft subtitle embedding      | ✅           | ✅         | Mux SRT/ASS as toggleable tracks (MKV: `srt`/`ass`, MP4: `mov_text`).                                                                                                   |
-| AVIF / AV1 encoding          | ✅           | ✅         | `libaom-av1` encodes (add `-still-picture 1 -f avif` for images); `libdav1d` decodes.                                                                                   |
+| Capability                   | iOS          | Android    | Notes                                                                                                                                                                                               |
+| ---------------------------- | ------------ | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FFmpeg argument execution    | ✅           | ✅         | Commands run asynchronously through the native compatibility library.                                                                                                                               |
+| FFprobe argument execution   | ✅           | ✅         | Custom FFprobe arguments return `FFmpegSessionResult`.                                                                                                                                              |
+| Parsed media information     | ✅           | ✅         | `getMediaInformation()` returns typed, parsed FFprobe JSON.                                                                                                                                         |
+| Log callback                 | ✅           | ✅         | Logs are delivered while a session is active, batched every 100 ms by default; `setLogBatchInterval(0)` delivers each message on its own.                                                           |
+| Encoding-statistics callback | ✅           | ✅         | Available for FFmpeg execution.                                                                                                                                                                     |
+| Immediate session ID         | ✅           | ✅         | `onSessionCreated` fires after the native session is created.                                                                                                                                       |
+| Cancel one session           | ✅           | ✅         | Pass the ID from `onSessionCreated`. Only that session is cancelled: a queued one never starts, a running one stops, and the rest of the queue carries on. Works for FFprobe sessions too.          |
+| Cancel all FFmpeg sessions   | ✅           | ✅         | Use `cancelAll()` or call `cancel()` without an ID.                                                                                                                                                 |
+| Pause and resume a session   | ✅           | ✅         | `pause()` / `resume()` with an `execute` session ID, running or queued. FFprobe sessions cannot be paused.                                                                                          |
+| Session state                | ✅           | ✅         | `getSessionState()` reports `queued`, `running`, `paused`, `completed`, `failed`, or `cancelled`.                                                                                                   |
+| Expo Go                      | ❌           | ❌         | A native development build is required.                                                                                                                                                             |
+| Capability discovery         | ✅           | ✅         | `listEncoders()`, `listDecoders()`, `listMuxers()`, `listDemuxers()`, `listFilters()`, `listProtocols()`, and `pickEncoder()` report what the bundled build supports.                               |
+| Subtitle burn-in             | ✅           | ✅         | libass with system fonts: Core Text on iOS, fontconfig over `/system/fonts` on Android.                                                                                                             |
+| H.264 encoding               | VideoToolbox | MediaCodec | Hardware on both, `libopenh264` as the software fallback; use `pickEncoder(['h264_videotoolbox', 'h264_mediacodec', 'libopenh264'])` instead of hard-coding an encoder.                             |
+| Remote HTTP(S) inputs        | ✅           | ✅         | iOS links SecureTransport, Android links mbedTLS. Remote server behaviour still varies; prefer local files for predictable app workflows.                                                           |
+| Soft subtitle embedding      | ✅           | ✅         | Mux SRT/ASS as toggleable tracks (MKV: `srt`/`ass`, MP4: `mov_text`).                                                                                                                               |
+| AVIF / AV1 encoding          | ✅           | ✅         | `libaom-av1` encodes (add `-still-picture 1 -f avif` for images); `libdav1d` decodes.                                                                                                               |
+| `compressVideo()`            | ✅           | ✅         | iOS: VideoToolbox decode + encode. Android: MediaCodec encode, software decode. Falls back to `libopenh264` when hardware fails or writes no frames (emulators). HEVC is hardware-only.             |
+| `createThumbnail()`          | ✅           | ✅         | JPEG or PNG, chosen by the output extension.                                                                                                                                                        |
+| Command strings              | ✅           | ✅         | `executeCommand()`, `probeCommand()`, `parseArguments()`, `formatArguments()`; pure JavaScript.                                                                                                     |
+| `content://` URIs            | ➖           | ✅         | Android only: inputs after `-i` (and FFprobe inputs) are read through their file descriptor; outputs are written to a temporary file and copied in after a successful run. iOS has no content URIs. |
 
 Codec availability is determined by the native FFmpeg builds described in [Bundled FFmpeg builds](#bundled-ffmpeg-builds). Do not assume every FFmpeg codec or external library is present.
 
@@ -321,7 +331,7 @@ Or build them yourself — see [`scripts/ffmpeg/README.md`](./scripts/ffmpeg/REA
 ### Requirements
 
 - React Native with the New Architecture enabled
-- `react-native-nitro-modules` 0.36.5 or newer
+- `react-native-nitro-modules` 0.36.5 or newer (developed against 0.37.2)
 - iOS 15.1 or newer
 - Android API 24 or newer
 - An Expo development build or bare React Native app
@@ -334,7 +344,7 @@ FFmpeg runs natively and needs a path or URI the native process can access.
 
 - Prefer files inside your app's document, cache, or temporary directory.
 - `file://` URIs and plain local paths both work. The package strips the `file://` scheme and percent-decoding for you, so a path containing spaces or non-ASCII characters is handled correctly; passing the raw URI straight to FFmpeg would write to a file literally named `my%20clip.mp4`.
-- On Android, copy a `content://` document into application storage before processing when the native library cannot open it directly.
+- On Android, `content://` URIs work directly — from `expo-document-picker` with `copyToCacheDirectory: false`, the photo picker, MediaStore, or a SAF folder. An input must follow `-i` (any content URI passed to FFprobe or `getMediaInformation()` is an input); FFmpeg reads it through its file descriptor, nothing is copied. Any other content URI is treated as an output: FFmpeg writes a private temporary file, which is copied into the URI once the run succeeds (MP4 needs to seek back into its output, which a provider stream cannot do). Content URIs inside filter graphs or concat lists are not rewritten. A provider that streams rather than serving a real file cannot be seeked, so an MP4 with its index at the end may not open from it.
 - Copy photo-library or document-picker assets when the provider gives temporary or security-scoped access.
 - Ensure the output directory already exists.
 - Use a unique output filename or pass `-y` when replacing an existing file is intentional.
@@ -421,6 +431,36 @@ function execute(
 
 The `onSessionCreated` callback receives the ID before the command completes, allowing targeted cancellation while work is running.
 
+Sessions run one at a time, in the order they were started (FFmpeg's command-line code keeps its state in globals). Waiting sessions hold no thread; `getSessionState()` reports them as `queued`.
+
+Log messages are batched: see [`setLogBatchInterval()`](#setlogbatchintervalintervalms). A batched `onLog` call can contain several lines; every line still arrives, in order, before the promise settles.
+
+### `executeCommand(command, onLog?, onStatistics?, onSessionCreated?)` / `probeCommand(command, onLog?, onSessionCreated?)`
+
+`execute()` and `probe()` for a command written as one string, the way FFmpegKit's `FFmpegKit.execute(command)` takes it.
+
+```typescript
+function executeCommand(
+  command: string,
+  onLog?: FFmpegLogCallback,
+  onStatistics?: FFmpegStatisticsCallback,
+  onSessionCreated?: FFmpegSessionCreatedCallback
+): Promise<FFmpegSessionResult>
+
+await executeCommand(`-y -i "${inputPath}" -vf "scale=-2:720" "${outputPath}"`)
+```
+
+The string is split by [`parseArguments()`](#parseargumentscommand--formatargumentsarguments). Prefer argument arrays when paths come from users: they need no quoting at all.
+
+### `parseArguments(command)` / `formatArguments(arguments)`
+
+```typescript
+function parseArguments(command: string): string[]
+function formatArguments(arguments_: readonly string[]): string
+```
+
+`parseArguments()` splits a command line with a small subset of POSIX shell rules: whitespace separates arguments, `'single quotes'` are literal, `"double quotes"` unescape only `\"` and `\\`, a backslash outside quotes escapes the next character, and adjacent parts join. Nothing else (variables, globs, `~`) is interpreted. It throws a `SyntaxError` for an unterminated quote. `formatArguments()` is the inverse, quoting only what needs it, for logging or displaying a command.
+
 ### `probe(arguments, onLog?, onSessionCreated?)`
 
 Starts an asynchronous FFprobe session.
@@ -433,7 +473,7 @@ function probe(
 ): Promise<FFmpegSessionResult>
 ```
 
-`onSessionCreated` can be used to correlate the native probe session with its eventual result. The bundled native dependency does not expose FFprobe cancellation.
+`onSessionCreated` can be used to correlate the probe session with its eventual result, or to cancel it with `cancel()` while it is queued or running.
 
 ### `getMediaInformation(path)`
 
@@ -461,7 +501,9 @@ function getMediaDuration(information: MediaInformation): number | undefined
 
 ### `cancel(sessionId?)`
 
-Cancels the given native FFmpeg execution session. FFmpeg runs one session at a time and the native core cannot single one out, so cancelling an active session also cancels any sessions queued behind it. An ID whose session has already finished, or that was never issued, is ignored. Calling `cancel()` without an ID cancels all active FFmpeg sessions. FFprobe cancellation is not exposed by the bundled native dependency.
+Cancels one session, started with `execute()` or `probe()`. A queued session is dropped before it starts and settles straight away with `cancelled: true`; a running session is stopped, and the next queued session then starts as usual. No other session is affected. An ID whose session has already finished, or that was never issued, is ignored. Calling `cancel()` without an ID cancels every session, like `cancelAll()`.
+
+Before 0.10, cancelling a running session also cancelled everything queued behind it.
 
 ```typescript
 function cancel(sessionId?: number): void
@@ -528,6 +570,16 @@ function getSessionState(sessionId: number): FFmpegSessionState
 
 `queued` sessions are waiting for the one running ahead of them, since FFmpeg runs one execution at a time. `unknown` means the ID was never issued, or it finished long enough ago that its record was dropped (the last 512 finished sessions are kept).
 
+### `setLogBatchInterval(intervalMs)`
+
+```typescript
+function setLogBatchInterval(intervalMs: number): void
+```
+
+How often `onLog` callbacks are delivered. Every callback is a separate hop onto the JavaScript thread, and FFmpeg can log thousands of lines a second at `-loglevel verbose` or `debug`, so by default messages are collected natively and handed over at most every **100 ms**, several lines per call. Every message still arrives, in order, and all of them have been delivered by the time the session's promise settles. `0` delivers each message as FFmpeg logs it (the behaviour before 0.10). Applies to sessions started after the call; values are clamped to 0–5000 ms. The example app's device suite measures both settings ("Batches log callbacks").
+
+Statistics callbacks are not batched: FFmpeg already reports progress only twice a second (`-stats_period`).
+
 ### `getFFmpegVersion()`
 
 Returns the version reported by the bundled native FFmpeg library.
@@ -589,6 +641,85 @@ function pickEncoder(candidates: string[]): Promise<string | undefined>
 const hevc = await pickEncoder(['libx265', 'hevc_videotoolbox'])
 ```
 
+### `listHardwareEncoders()`
+
+Returns the hardware video encoders in the build: the VideoToolbox family on iOS, the MediaCodec family on Android.
+
+```typescript
+function listHardwareEncoders(): Promise<string[]>
+```
+
+### `compressVideo(input, output, options?)`
+
+Re-encodes a video for sharing or upload, hardware-accelerated by default.
+
+```typescript
+function compressVideo(
+  input: string,
+  output: string,
+  options?: {
+    codec?: 'h264' | 'hevc' // default 'h264'
+    maxWidth?: number // fit inside the box, keep aspect ratio, never upscale
+    maxHeight?: number
+    videoBitrateKbits?: number // default: from the output size and frame rate
+    frameRate?: number // default: the source's
+    audio?: 'aac' | 'copy' | 'none' // default 'aac'
+    audioBitrateKbits?: number // default 128
+    hardware?: 'prefer' | 'require' | 'avoid' // default 'prefer'
+    hardwareDecoding?: boolean // VideoToolbox decoding on iOS, default true
+    faststart?: boolean // MP4 index first, default true
+    onProgress?: (progress: TranscodeProgress) => void
+    onLog?: FFmpegLogCallback
+    onSessionCreated?: FFmpegSessionCreatedCallback
+  }
+): Promise<CompressVideoResult>
+```
+
+| Step           | iOS                                    | Android                        |
+| -------------- | -------------------------------------- | ------------------------------ |
+| Decode         | VideoToolbox (`-hwaccel videotoolbox`) | Software                       |
+| Encode (H.264) | `h264_videotoolbox`                    | `h264_mediacodec` (NV12 input) |
+| Encode (HEVC)  | `hevc_videotoolbox`, tagged `hvc1`     | `hevc_mediacodec`              |
+| Fallback       | `libopenh264` (H.264 only)             | `libopenh264` (H.264 only)     |
+
+It probes the input first, so the picture is scaled to fit `maxWidth` × `maxHeight` in its _displayed_ orientation (portrait phone footage stays portrait), sized to even dimensions, and given a bitrate of about 0.07 bits per pixel per frame (H.264; HEVC a third less) unless you pass one. Only the first video and first audio stream are kept, so data tracks MP4 cannot hold do not fail the run.
+
+If the hardware encoder fails, or "succeeds" without writing a frame (an Android emulator's MediaCodec does exactly that), the same command is retried with the software encoder. `onSessionCreated` fires for each attempt, so `cancel()` always reaches the one running. The result reports `encoder`, `hardware`, the output `width`/`height`, the bitrate, every attempt's return code, and the final `FFmpegSessionResult`.
+
+`TranscodeProgress` carries `fraction` (0–1, when the input's duration is known), `timeMs`, `sizeBytes`, `bitrateKbits`, `speed` and `fps`.
+
+Throws a `MunimFfmpegError` whose `code` is `NO_VIDEO_STREAM`, `NO_ENCODER` (for example HEVC with `hardware: 'avoid'`, since the LGPL build has no software HEVC encoder), `CANCELLED`, or `FAILED` once every encoder has failed; `error.result` holds the last run.
+
+### `createThumbnail(input, output, options?)`
+
+```typescript
+function createThumbnail(
+  input: string,
+  output: string, // .jpg / .jpeg or .png
+  options?: {
+    timeMs?: number // default 0, clamped to the video's length
+    maxWidth?: number
+    maxHeight?: number
+    quality?: number // JPEG, 0–1, default 0.8
+  }
+): Promise<{ path: string; width: number; height: number; timeMs: number }>
+```
+
+Seeks to the nearest keyframe before `timeMs` and decodes forward to the exact frame, so it is fast even deep into long videos. Throws `MunimFfmpegError` (`NO_VIDEO_STREAM`, `FAILED`, `CANCELLED`).
+
+### Stream helpers
+
+Pure functions over a `MediaInformation` report:
+
+```typescript
+function getVideoStream(information: MediaInformation): MediaStream | undefined // skips cover art
+function getRotation(stream: MediaStream): number // 0, 90, 180 or 270, clockwise
+function getDisplaySize(
+  stream: MediaStream
+): { width: number; height: number } | undefined
+function getFrameRate(stream: MediaStream): number | undefined
+```
+
 ### `normalizePath(value)`
 
 Converts a `file://` URI into the plain path FFmpeg expects, and returns anything else untouched.
@@ -597,7 +728,7 @@ Converts a `file://` URI into the plain path FFmpeg expects, and returns anythin
 function normalizePath(value: string): string
 ```
 
-`execute()`, `probe()`, and `getMediaInformation()` already apply this to every argument, so you rarely need to call it directly. It is exported for cases where you build a path yourself — a concat list file, for example, whose entries FFmpeg reads verbatim.
+`execute()`, `probe()`, `getMediaInformation()` and the helpers built on them already apply this to every argument, so you rarely need to call it directly. It is exported for cases where you build a path yourself — a concat list file, for example, whose entries FFmpeg reads verbatim.
 
 ### `FFmpegSessionResult`
 
@@ -682,7 +813,38 @@ const result = await execute([
 if (!result.success) throw new Error(result.failStackTrace ?? result.output)
 ```
 
+### Compress a video for upload
+
+```typescript
+import { compressVideo, MunimFfmpegError } from 'munim-ffmpeg'
+
+try {
+  const result = await compressVideo(inputPath, outputPath, {
+    maxWidth: 1280,
+    maxHeight: 1280,
+    onProgress: ({ fraction }) => setProgress(fraction ?? 0),
+    onSessionCreated: (id) => (currentSession = id), // for a cancel button
+  })
+  console.log(result.encoder, result.hardware, result.width, result.height)
+} catch (error) {
+  if (error instanceof MunimFfmpegError && error.code === 'CANCELLED') return
+  throw error
+}
+```
+
 ### Generate a thumbnail
+
+```typescript
+import { createThumbnail } from 'munim-ffmpeg'
+
+const { width, height } = await createThumbnail(inputPath, outputImagePath, {
+  timeMs: 1000,
+  maxWidth: 320,
+  quality: 0.8,
+})
+```
+
+Or with a plain command:
 
 ```typescript
 import { execute } from 'munim-ffmpeg'
@@ -697,6 +859,21 @@ const result = await execute([
   '1',
   outputImagePath,
 ])
+```
+
+### Process a file picked on Android without copying it
+
+```typescript
+import * as DocumentPicker from 'expo-document-picker'
+import { compressVideo } from 'munim-ffmpeg'
+
+const picked = await DocumentPicker.getDocumentAsync({
+  type: 'video/*',
+  copyToCacheDirectory: false, // keeps the provider's content:// URI on Android
+})
+if (!picked.canceled) {
+  await compressVideo(picked.assets[0].uri, outputPath, { maxWidth: 1280 })
+}
 ```
 
 ### Write an AVIF still
@@ -910,6 +1087,8 @@ const cancelCurrentCommand = () => {
 const result = await execution
 console.log(result.cancelled)
 ```
+
+Only that session is cancelled. Sessions queued behind it start as usual, and cancelling a queued session drops it without disturbing the one running.
 
 ### Run a custom FFprobe query
 

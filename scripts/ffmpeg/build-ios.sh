@@ -139,8 +139,8 @@ fi
 # slices the same way its own do.
 if [ ! -f "$PREFIX/lib/libaom.a" ]; then
   echo "  libaom"
-  fetch "https://storage.googleapis.com/aom-releases/libaom-3.15.1.tar.gz" libaom-3.15.1.tar.gz
-  unpack libaom-3.15.1.tar.gz "libaom-$SLICE"
+  fetch "https://storage.googleapis.com/aom-releases/libaom-3.15.3.tar.gz" libaom-3.15.3.tar.gz
+  unpack libaom-3.15.3.tar.gz "libaom-$SLICE"
   (
     cd "$DEPS/libaom-$SLICE"
     cat > toolchain-ios.cmake <<EOF
@@ -166,8 +166,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libopenh264.a" ]; then
   echo "  openh264"
-  fetch "https://github.com/cisco/openh264/archive/refs/tags/v2.6.0.tar.gz" openh264-2.6.0.tar.gz
-  unpack openh264-2.6.0.tar.gz "openh264-$SLICE"
+  fetch "https://github.com/cisco/openh264/archive/refs/tags/v2.7.0.tar.gz" openh264-2.7.0.tar.gz
+  unpack openh264-2.7.0.tar.gz "openh264-$SLICE"
   (
     cd "$DEPS/openh264-$SLICE"
     [ "$ARCH" = "arm64" ] && MESON_CPU_FAMILY=aarch64 || MESON_CPU_FAMILY=x86_64
@@ -213,8 +213,8 @@ fi
 # through Core Text, so no fontconfig is needed.
 if [ ! -f "$PREFIX/lib/libfreetype.a" ]; then
   echo "  FreeType"
-  fetch "https://download.savannah.gnu.org/releases/freetype/freetype-2.14.3.tar.xz" freetype-2.14.3.tar.xz
-  unpack freetype-2.14.3.tar.xz "freetype-$SLICE"
+  fetch "https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz" freetype-2.15.0.tar.xz
+  unpack freetype-2.15.0.tar.xz "freetype-$SLICE"
   (
     cd "$DEPS/freetype-$SLICE"
     PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig" \
@@ -226,8 +226,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libfribidi.a" ]; then
   echo "  FriBidi"
-  fetch "https://github.com/fribidi/fribidi/releases/download/v1.0.17/fribidi-1.0.17.tar.xz" fribidi-1.0.17.tar.xz
-  unpack fribidi-1.0.17.tar.xz "fribidi-$SLICE"
+  fetch "https://github.com/fribidi/fribidi/releases/download/v1.0.18/fribidi-1.0.18.tar.xz" fribidi-1.0.18.tar.xz
+  unpack fribidi-1.0.18.tar.xz "fribidi-$SLICE"
   (
     cd "$DEPS/fribidi-$SLICE"
     ./configure --host="$HOST" --prefix="$PREFIX" --disable-shared --enable-static \
@@ -240,8 +240,8 @@ fi
 
 if [ ! -f "$PREFIX/lib/libharfbuzz.a" ]; then
   echo "  HarfBuzz"
-  fetch "https://github.com/harfbuzz/harfbuzz/releases/download/14.5.1/harfbuzz-14.5.1.tar.xz" harfbuzz-14.5.1.tar.xz
-  unpack harfbuzz-14.5.1.tar.xz "harfbuzz-$SLICE"
+  fetch "https://github.com/harfbuzz/harfbuzz/releases/download/15.1.0/harfbuzz-15.1.0.tar.xz" harfbuzz-15.1.0.tar.xz
+  unpack harfbuzz-15.1.0.tar.xz "harfbuzz-$SLICE"
   (
     cd "$DEPS/harfbuzz-$SLICE"
     [ "$ARCH" = "arm64" ] && MESON_CPU_FAMILY=aarch64 || MESON_CPU_FAMILY=x86_64

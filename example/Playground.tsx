@@ -12,6 +12,8 @@ import {
 } from 'react-native'
 import {
   cancel,
+  compressVideo,
+  createThumbnail,
   execute,
   getMediaInformation,
   normalizePath,
@@ -145,8 +147,12 @@ export function Playground() {
       try {
         const result: FFmpegSessionResult = await execute(
           arguments_,
+          // Logs arrive batched (several lines per callback, at most every
+          // 100 ms by default), so each chunk is split back into lines.
           (message) =>
-            setLog((previous) => [...previous.slice(-11), message.trimEnd()]),
+            setLog((previous) =>
+              [...previous, ...message.trimEnd().split('\n')].slice(-12)
+            ),
           (timeMs, _size, bitrate, speed, _frame, fps) => {
             if (expectedSeconds > 0) {
               setProgress(Math.min(1, timeMs / 1000 / expectedSeconds))
@@ -198,10 +204,16 @@ export function Playground() {
     []
   )
 
-  const pickFile = guard('Pick', async () => {
+  const pickFile = guard('Pick', async () => pick(true))
+
+  // On Android, skipping the copy hands back the provider's content:// URI,
+  // which the module opens through the ContentResolver without copying it.
+  const pickInPlace = guard('Pick', async () => pick(false))
+
+  const pick = async (copyToCacheDirectory: boolean) => {
     const picked = await DocumentPicker.getDocumentAsync({
       type: ['video/*', 'audio/*'],
-      copyToCacheDirectory: true,
+      copyToCacheDirectory,
     })
     if (picked.canceled || !picked.assets?.[0]) return
     const asset = picked.assets[0]
@@ -210,7 +222,7 @@ export function Playground() {
     setInput({ uri: asset.uri, name: asset.name })
     setOutputs([])
     await inspect(asset.uri)
-  })
+  }
 
   const generateSample = guard('Sample', async () => {
     // Fixtures generated in JavaScript: no bundled media, no network.
@@ -383,6 +395,55 @@ export function Playground() {
     addOutput(output, 'AVIF still (libaom encodes, dav1d decodes)')
   })
 
+  // The high-level helper: hardware encoder first (VideoToolbox decode and
+  // encode on iOS, MediaCodec on Android), software if that fails, progress as
+  // a fraction of the input's duration.
+  const compress = guard('Compress', async () => {
+    if (!input) return
+    const output = new File(directory, 'compressed.mp4')
+    setBusy('compressVideo (hardware first)')
+    setError(undefined)
+    setProgress(0)
+    setStatistics(undefined)
+    setLog([])
+    try {
+      const result = await compressVideo(input.uri, output.uri, {
+        maxWidth: 1280,
+        maxHeight: 1280,
+        onProgress: ({ fraction, speed, fps }) => {
+          if (fraction !== undefined) setProgress(fraction)
+          setStatistics(`${fps.toFixed(0)} fps · ${speed.toFixed(2)}×`)
+        },
+        onSessionCreated: (id) => {
+          session.current = id
+        },
+      })
+      addOutput(
+        output,
+        `${result.width}×${result.height} via ${result.encoder} (${
+          result.hardware ? 'hardware' : 'software fallback'
+        })`
+      )
+    } finally {
+      session.current = undefined
+      setBusy(undefined)
+      setProgress(undefined)
+    }
+  })
+
+  const thumbnail = guard('Thumbnail', async () => {
+    if (!input) return
+    const output = new File(directory, 'thumbnail.jpg')
+    const result = await createThumbnail(input.uri, output.uri, {
+      timeMs: (duration * 1000) / 2,
+      maxWidth: 640,
+    })
+    addOutput(
+      output,
+      `${result.width}×${result.height} JPEG from ${(result.timeMs / 1000).toFixed(2)} s`
+    )
+  })
+
   const cancelCurrent = () => {
     if (session.current !== undefined) cancel(session.current)
   }
@@ -402,6 +463,16 @@ export function Playground() {
           secondary
         />
       </View>
+      {Platform.OS === 'android' ? (
+        <View style={styles.row}>
+          <Button
+            label="Pick in place (content://)"
+            onPress={pickInPlace}
+            disabled={disabled}
+            secondary
+          />
+        </View>
+      ) : null}
       {input ? (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>{input.name}</Text>
@@ -417,6 +488,14 @@ export function Playground() {
       )}
 
       <Text style={styles.sectionTitle}>2 · Actions</Text>
+      <View style={styles.row}>
+        <Button
+          label="Compress (hardware)"
+          onPress={compress}
+          disabled={needsInput}
+        />
+        <Button label="Thumbnail" onPress={thumbnail} disabled={needsInput} />
+      </View>
       <View style={styles.row}>
         <Button
           label="Transcode H.264"
@@ -482,7 +561,7 @@ export function Playground() {
           <Text style={styles.mono}>
             {(output.bytes / 1024).toFixed(1)} KB · {output.note}
           </Text>
-          {output.name.endsWith('.avif') ? (
+          {/\.(avif|jpg)$/.test(output.name) ? (
             // React Native decodes AVIF natively on iOS 16+ and Android 12+.
             <Image
               source={{ uri: output.uri }}
