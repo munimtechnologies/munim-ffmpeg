@@ -1,3 +1,18 @@
+## [0.10.0](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.9.2...v0.10.0) (2026-11-16)
+
+### ✨ Features
+
+* compressVideo, createThumbnail, command strings, content:// URIs, per-session cancel and batched logs ([2505cd9](https://github.com/munimtechnologies/munim-ffmpeg/commit/2505cd9f9f345cbf343355edbfcc99e68dd59a7c))
+
+### 🐛 Bug Fixes
+
+* **android:** convert JNI modified UTF-8 in the FFmpeg bridge ([e458bad](https://github.com/munimtechnologies/munim-ffmpeg/commit/e458bad8ea8a42ce74a9a580dea02cd390ca6791))
+
+### 🛠️ Other changes
+
+* **binaries:** bump bundled native libraries to their latest releases ([8ddf2f8](https://github.com/munimtechnologies/munim-ffmpeg/commit/8ddf2f8551fcaf29dac582ca98c1921a57150abd))
+* **deps:** React Native 0.88.1, Nitro 0.37.2, Expo 58.0.25 and CI example builds ([a818991](https://github.com/munimtechnologies/munim-ffmpeg/commit/a81899124f19b40c011cde3e9e0746001dd6cb9e))
+
 ## [0.9.2](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.9.1...v0.9.2) (2026-10-17)
 
 ### 🐛 Bug Fixes
