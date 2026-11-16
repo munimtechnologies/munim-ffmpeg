@@ -1,0 +1,79 @@
+# Builds the example app for Android: Expo prebuild, then Gradle, against the
+# FFmpeg binaries of the current release (fetched by the postinstall script).
+name: Build Android
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'scripts/ffmpeg/**'
+      - '.github/workflows/build-binaries.yml'
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/ios-build.yml'
+      - 'ios/**'
+      - '*.podspec'
+      - 'test/**'
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'scripts/ffmpeg/**'
+      - '.github/workflows/build-binaries.yml'
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/ios-build.yml'
+      - 'ios/**'
+      - '*.podspec'
+      - 'test/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Android example app
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      # Runs the postinstall script, which downloads and verifies the FFmpeg
+      # binaries for this version.
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: zulu
+          java-version: 17
+
+      - name: Cache Gradle
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('package-lock.json', 'android/build.gradle', 'android/gradle.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Expo prebuild
+        working-directory: example
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Assemble debug APK (arm64-v8a)
+        working-directory: example/android
+        run: ./gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a --no-daemon --stacktrace
+
+      - name: Check the FFmpeg library is packaged
+        run: |
+          apk=$(find example/android/app/build/outputs/apk/debug -name '*.apk' | head -1)
+          echo "$apk"
+          unzip -l "$apk" | grep -E 'lib/arm64-v8a/lib(munimffmpeg|NitroMunimFfmpeg)\.so'

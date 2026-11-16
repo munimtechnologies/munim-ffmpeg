@@ -1,0 +1,82 @@
+# Builds the example app for the iOS Simulator: Expo prebuild, CocoaPods, then
+# xcodebuild, against the FFmpeg binaries of the current release (fetched by
+# the postinstall script).
+name: Build iOS
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'scripts/ffmpeg/**'
+      - '.github/workflows/build-binaries.yml'
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/android-build.yml'
+      - 'android/**'
+      - 'test/**'
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'scripts/ffmpeg/**'
+      - '.github/workflows/build-binaries.yml'
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/android-build.yml'
+      - 'android/**'
+      - 'test/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build iOS example app
+    runs-on: macos-26
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      # Runs the postinstall script, which downloads and verifies the FFmpeg
+      # binaries for this version.
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Expo prebuild
+        working-directory: example
+        run: npx expo prebuild --platform ios --no-install
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/CocoaPods
+          key: pods-${{ runner.os }}-${{ hashFiles('package-lock.json', '*.podspec') }}
+          restore-keys: pods-${{ runner.os }}-
+
+      - name: Install pods
+        working-directory: example/ios
+        run: pod install
+
+      - name: Build for the iOS Simulator
+        working-directory: example/ios
+        run: |
+          workspace=$(ls -d *.xcworkspace | head -1)
+          scheme="${workspace%.xcworkspace}"
+          echo "Building $scheme with $(xcodebuild -version | head -1)"
+          set -o pipefail
+          xcodebuild \
+            -workspace "$workspace" \
+            -scheme "$scheme" \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build | tail -n 200

@@ -1,6 +1,8 @@
-# The native binaries take ~40 minutes to build, so this workflow only guards
-# the JavaScript surface: types, lint, the compiled lib, and that the published
-# package stays well-formed. build-binaries.yml builds the native libraries.
+# The JavaScript surface: types, lint, unit tests, the compiled lib, the
+# committed Nitro bindings, and that the published package stays well-formed.
+# build-binaries.yml builds the native FFmpeg libraries (~40 minutes);
+# ios-build.yml and android-build.yml build the example app against the
+# released ones.
 name: CI
 
 on:
@@ -8,6 +10,13 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   checks:
@@ -19,8 +28,26 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --ignore-scripts
+
+      # The generated bindings are committed; regenerating them must not
+      # change anything.
+      - name: Nitro bindings are up to date
+        run: |
+          npm run codegen > /dev/null
+          git diff --exit-code -- nitrogen/
+
       - run: npm run typecheck
+      - run: npm run typecheck:test
+      - run: npm test
       - run: npm run build
       - run: npm run typecheck:example
       - run: npm run lint
       - run: npm pack --dry-run
+
+      # The JNI bridge's UTF-8 conversions ship inside the binaries; their
+      # host-side test is cheap enough to run on every change.
+      - name: JNI string conversion test
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -I scripts/ffmpeg/src \
+            scripts/ffmpeg/test/modified_utf8_test.c -o "$RUNNER_TEMP/modified_utf8_test"
+          "$RUNNER_TEMP/modified_utf8_test"
