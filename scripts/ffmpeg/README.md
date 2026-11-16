@@ -35,6 +35,13 @@ and `gperf`. Override defaults with `ANDROID_NDK`, `FFMPEG_VERSION`,
 `FFMPEG_WORKSPACE`, `MIN_IOS`. The Android scripts also run on Linux, which is
 how CI builds them.
 
+`package.sh` refuses to bundle an iOS slice that an app couldn't link:
+[`check-ios-link.sh`](check-ios-link.sh) takes every symbol the static library
+needs but doesn't define, and checks that the frameworks and libraries in the
+podspec (plus Foundation and CoreFoundation) provide all of them. 0.10.0
+shipped without this check, and FreeType's HVF driver left eight `_HVF_*`
+symbols unresolved in every iOS app.
+
 ## Building in GitHub Actions
 
 [`build-binaries.yml`](../../.github/workflows/build-binaries.yml) builds every

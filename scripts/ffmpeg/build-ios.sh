@@ -5,7 +5,7 @@
 #   ./build-ios.sh iphonesimulator arm64
 #   ./build-ios.sh iphonesimulator x86_64
 #
-# package-ios.sh then merges the slices into a single .xcframework.
+# package.sh then merges the slices into a single .xcframework.
 set -euo pipefail
 
 SDK_NAME="${1:-iphoneos}"
@@ -215,13 +215,25 @@ if [ ! -f "$PREFIX/lib/libfreetype.a" ]; then
   echo "  FreeType"
   fetch "https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz" freetype-2.15.0.tar.xz
   unpack freetype-2.15.0.tar.xz "freetype-$SLICE"
+  # FreeType 2.15 turns on its HVF driver (Apple's hierarchical variable fonts)
+  # whenever the SDK has <hvf/Scaler.h>, which iOS 18.4+ SDKs do. The driver
+  # then needs libhvf, an iOS 18.4+ system dylib that the podspec doesn't link
+  # and the iOS 15.1 deployment target can't rely on, so every app failed to
+  # link with undefined _HVF_* symbols. configure has no --without-hvf switch;
+  # answering its header check with "no" leaves the driver as the same inert
+  # stub every non-Apple build gets.
   (
     cd "$DEPS/freetype-$SLICE"
     PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig" \
     ./configure --host="$HOST" --prefix="$PREFIX" --disable-shared --enable-static \
-      --with-zlib=yes --without-png --without-harfbuzz --without-brotli --without-bzip2
+      --with-zlib=yes --without-png --without-harfbuzz --without-brotli --without-bzip2 \
+      ac_cv_header_hvf_Scaler_h=no
     make -j"$JOBS" && make install
   ) > "$WORKSPACE/build/freetype-$SLICE.log" 2>&1
+fi
+if grep -q '^#define FT_CONFIG_OPTION_HVF' "$PREFIX/include/freetype2/freetype/config/ftoption.h"; then
+  echo "  FreeType was configured with the HVF driver, which needs libhvf" >&2
+  exit 1
 fi
 
 if [ ! -f "$PREFIX/lib/libfribidi.a" ]; then
