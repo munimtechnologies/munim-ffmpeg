@@ -425,12 +425,20 @@ export async function runSuite(
         const sleep = (ms: number) =>
           new Promise((resolve) => setTimeout(resolve, ms))
 
+        // Input is read at 4x real time. Unthrottled, a fast hardware encoder
+        // (VideoToolbox on an M3) can already hold the rest of the 20 s in
+        // its pipeline when the pause lands, finish while "paused", and make
+        // resume() correctly report that nothing was paused any more. At 4x
+        // the pause lands about 3 s in, far from the end, on any device; it
+        // also exercises the -readrate clock shift after a resume.
         const execution = execute(
           [
             '-y',
             '-hide_banner',
             '-stream_loop',
             '-1',
+            '-readrate',
+            '4',
             ...rawVideoInput(raw.uri),
             '-t',
             String(seconds),
@@ -464,12 +472,21 @@ export async function runSuite(
           lastTimeMs === pausedAt,
           `progress moved while paused: ${pausedAt} -> ${lastTimeMs} ms`
         )
-        assert(pausedAt < seconds * 1000, 'finished before it could be paused')
-
         assert(
-          resume(sessionId),
-          'resume() returned false for a paused session'
+          pausedAt < (seconds - 5) * 1000,
+          `paused too close to the end to prove anything: ${pausedAt} ms of ${seconds * 1000}`
         )
+
+        if (!resume(sessionId)) {
+          // Report how the session actually ended instead of a bare false.
+          const state = getSessionState(sessionId)
+          const ended = state === 'paused' ? undefined : await execution
+          throw new Error(
+            `resume() returned false; state ${state}, return code ${ended?.returnCode}, ` +
+              `paused at ${pausedAt} ms, last progress ${lastTimeMs} ms: ` +
+              `${ended?.output.trim().split('\n').slice(-2).join(' | ') ?? ''}`
+          )
+        }
         assert(
           getSessionState(sessionId) === 'running',
           `state after resume: ${getSessionState(sessionId)}`
