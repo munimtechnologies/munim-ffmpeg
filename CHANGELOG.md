@@ -1,3 +1,9 @@
+## [0.10.1](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.10.0...v0.10.1) (2026-11-17)
+
+### 🐛 Bug Fixes
+
+* **ios:** disable FreeType HVF driver and check iOS slices link against podspec frameworks ([#18](https://github.com/munimtechnologies/munim-ffmpeg/issues/18)) ([94f8480](https://github.com/munimtechnologies/munim-ffmpeg/commit/94f84805ac488a3cb57032b859189a07c657088c))
+
 ## [0.10.0](https://github.com/munimtechnologies/munim-ffmpeg/compare/v0.9.2...v0.10.0) (2026-11-16)
 
 ### ✨ Features

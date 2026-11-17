@@ -50,6 +50,11 @@ for slice in "$DEVICE" "$SIM_ARM" "$SIM_X86"; do
   [ -f "$slice" ] || { echo "  missing $slice — run build-ios.sh" >&2; exit 1; }
 done
 
+# An app has to be able to link every slice with only what the podspec links.
+"$HERE/check-ios-link.sh" "$DEVICE" iphoneos arm64
+"$HERE/check-ios-link.sh" "$SIM_ARM" iphonesimulator arm64
+"$HERE/check-ios-link.sh" "$SIM_X86" iphonesimulator x86_64
+
 # Both simulator architectures go in one fat library; the device slice stays
 # separate because an xcframework cannot mix platforms in a single binary.
 # The file name has to match the device one — CocoaPods refuses an xcframework
